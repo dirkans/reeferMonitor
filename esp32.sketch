@@ -1,0 +1,63 @@
+void loop() {
+  if(WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    
+    // 1. Imprimir a donde nos estamos conectando
+    Serial.print("🌐 Conectando a: ");
+    Serial.println(serverUrl);
+
+    http.begin(serverUrl);
+    http.addHeader("Content-Type", "application/json");
+
+    // --- LECTURA SENSORES ---
+    sensors.requestTemperatures();
+    float tempReturn = sensors.getTempCByIndex(0);
+    if(tempReturn == -127) tempReturn = 20.0; 
+    
+    // Si NO tenes el ADS1115 conectado aun, esto puede dar 0 o error, no importa ahora
+    float ampR = leerCorriente(0);
+    float ampS = leerCorriente(1);
+    float ampT = leerCorriente(2);
+
+    // --- JSON ---
+    StaticJsonDocument<768> doc;
+    doc["device_id"] = device_id;
+    doc["temp_return"] = tempReturn;
+    doc["temp_supply"] = tempReturn - 8.0;
+    doc["temp_evap"] = tempReturn - 4.0;
+    doc["amp_r"] = ampR; doc["amp_s"] = ampS; doc["amp_t"] = ampT;
+    doc["rssi"] = WiFi.RSSI();
+    // Estados dummy para probar
+    doc["real_comp"] = 0; doc["real_evap"] = 0; doc["real_cond"] = 0; doc["real_heat"] = 0; doc["real_reefer"] = 1;
+
+    String jsonStr;
+    serializeJson(doc, jsonStr);
+
+    // 2. Intentar enviar
+    Serial.println("📤 Enviando datos...");
+    int code = http.POST(jsonStr);
+
+    // 3. VER EL RESULTADO (ESTO ES LO IMPORTANTE)
+    if(code > 0) {
+      Serial.print("✅ ÉXITO! Código HTTP: ");
+      Serial.println(code); // Deberia ser 200
+      String body = http.getString();
+      Serial.println("📩 Respuesta Server: " + body);
+      
+      // ... (Aquí iría la lógica de relays) ...
+      
+    } else {
+      Serial.print("❌ ERROR DE CONEXIÓN. Código: ");
+      Serial.println(code);
+      Serial.print("   Causa probable: ");
+      if(code == -1) Serial.println("Servidor no encontrado o FIREWALL bloqueando el puerto 8000.");
+      else if(code == -4) Serial.println("Timeout (El server tarda mucho).");
+      else Serial.println("Error desconocido.");
+    }
+    http.end();
+  } else {
+    Serial.println("⚠️ WiFi Desconectado!");
+  }
+  
+  delay(5000); 
+}
