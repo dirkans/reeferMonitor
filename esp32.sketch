@@ -1,63 +1,149 @@
+#include <WiFiManager.h> 
+#include <HTTPClient.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include <ArduinoJson.h>
+#include <Preferences.h>
+
+// --- PINES ---
+const int oneWireBus = 4; 
+const int PIN_COMP = 26;
+const int PIN_EVAP = 27;
+const int PIN_COND = 14;
+const int PIN_HEAT = 12;
+const int PIN_REEFER = 13;
+
+// Variables
+char device_id[50] = "alejandra1"; 
+String serverUrl = "http://10.29.92.170:8000/api/datos";
+
+// Objetos
+OneWire oneWire(oneWireBus);
+DallasTemperature sensors(&oneWire);
+Preferences preferences; 
+WiFiManager wm;
+WiFiManagerParameter custom_device_id("deviceid", "Nombre del Equipo", device_id, 50);
+
+void setup() {
+  Serial.begin(115200);
+  
+  // 1. Configurar Pines (Lógica Invertida: HIGH = APAGADO)
+  pinMode(PIN_COMP, OUTPUT); pinMode(PIN_EVAP, OUTPUT);
+  pinMode(PIN_COND, OUTPUT); pinMode(PIN_HEAT, OUTPUT);
+  pinMode(PIN_REEFER, OUTPUT);
+  
+  digitalWrite(PIN_COMP, HIGH); digitalWrite(PIN_EVAP, HIGH);
+  digitalWrite(PIN_COND, HIGH); digitalWrite(PIN_HEAT, HIGH);
+  digitalWrite(PIN_REEFER, HIGH);
+
+  // 2. Cargar nombre
+  preferences.begin("reefer_config", false);
+  String savedId = preferences.getString("dev_id", "");
+  if(savedId != "") savedId.toCharArray(device_id, 50);
+  
+  // 3. WiFiManager
+  wm.addParameter(&custom_device_id);
+  bool res = wm.autoConnect("Reefer_Setup", "password123"); 
+
+  if(!res) ESP.restart();
+  
+  String newId = custom_device_id.getValue();
+  if(newId != device_id && newId.length() > 0) {
+      preferences.putString("dev_id", newId);
+      newId.toCharArray(device_id, 50);
+  }
+  preferences.end();
+
+  Serial.println("Conectado! Soy: " + String(device_id));
+  sensors.begin();
+}
+
 void loop() {
   if(WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
-    
-    // 1. Imprimir a donde nos estamos conectando
-    Serial.print("🌐 Conectando a: ");
-    Serial.println(serverUrl);
-
     http.begin(serverUrl);
     http.addHeader("Content-Type", "application/json");
 
-    // --- LECTURA SENSORES ---
+    // --- SENSORES ---
     sensors.requestTemperatures();
     float tempReturn = sensors.getTempCByIndex(0);
     if(tempReturn == -127) tempReturn = 20.0; 
+
+    // Simulacion Temperaturas
+    float tempSupply = tempReturn - 8.0;
+    float tempEvap = (tempReturn + tempSupply) / 2.0;
     
-    // Si NO tenes el ADS1115 conectado aun, esto puede dar 0 o error, no importa ahora
-    float ampR = leerCorriente(0);
-    float ampS = leerCorriente(1);
-    float ampT = leerCorriente(2);
+    // --- SIMULACION CORRIENTES TRIFASICAS ---
+    float ampR = 15.0; 
+    float ampS = 14.5; // Un poco desbalanceada para realismo
+    float ampT = 15.2;
+
+    // --- LEER ESTADO REAL (FEEDBACK INVERTIDO) ---
+    // !digitalRead: si lee LOW (0), guarda 1 (ON)
+    int stComp = !digitalRead(PIN_COMP);
+    int stEvap = !digitalRead(PIN_EVAP);
+    int stCond = !digitalRead(PIN_COND);
+    int stHeat = !digitalRead(PIN_HEAT);
+    int stReefer = !digitalRead(PIN_REEFER);
 
     // --- JSON ---
     StaticJsonDocument<768> doc;
     doc["device_id"] = device_id;
     doc["temp_return"] = tempReturn;
-    doc["temp_supply"] = tempReturn - 8.0;
-    doc["temp_evap"] = tempReturn - 4.0;
-    doc["amp_r"] = ampR; doc["amp_s"] = ampS; doc["amp_t"] = ampT;
+    doc["temp_supply"] = tempSupply;
+    doc["temp_evap"] = tempEvap;
+    
+    // Enviamos las 3 fases
+    doc["amp_r"] = ampR; 
+    doc["amp_s"] = ampS; 
+    doc["amp_t"] = ampT;
+    
     doc["rssi"] = WiFi.RSSI();
-    // Estados dummy para probar
-    doc["real_comp"] = 0; doc["real_evap"] = 0; doc["real_cond"] = 0; doc["real_heat"] = 0; doc["real_reefer"] = 1;
+    
+    // Estados Reales
+    doc["real_comp"] = stComp;
+    doc["real_evap"] = stEvap;
+    doc["real_cond"] = stCond;
+    doc["real_heat"] = stHeat;
+    doc["real_reefer"] = stReefer;
 
     String jsonStr;
     serializeJson(doc, jsonStr);
 
-    // 2. Intentar enviar
-    Serial.println("📤 Enviando datos...");
     int code = http.POST(jsonStr);
 
-    // 3. VER EL RESULTADO (ESTO ES LO IMPORTANTE)
-    if(code > 0) {
-      Serial.print("✅ ÉXITO! Código HTTP: ");
-      Serial.println(code); // Deberia ser 200
+    if(code == 200) {
       String body = http.getString();
-      Serial.println("📩 Respuesta Server: " + body);
+      StaticJsonDocument<768> docRes;
+      deserializeJson(docRes, body);
       
-      // ... (Aquí iría la lógica de relays) ...
+      int rComp = docRes["relays"]["comp"];
+      int rEvap = docRes["relays"]["evap"];
+      int rCond = docRes["relays"]["cond"];
+      int rHeat = docRes["relays"]["heat"];
+      int rReefer = docRes["relays"]["reefer"];
+
+      // --- ACTUAR (LÓGICA INVERTIDA) ---
+      // Si servidor manda 1 (ON) -> Escribimos LOW
+      // Si servidor manda 0 (OFF) -> Escribimos HIGH
       
-    } else {
-      Serial.print("❌ ERROR DE CONEXIÓN. Código: ");
-      Serial.println(code);
-      Serial.print("   Causa probable: ");
-      if(code == -1) Serial.println("Servidor no encontrado o FIREWALL bloqueando el puerto 8000.");
-      else if(code == -4) Serial.println("Timeout (El server tarda mucho).");
-      else Serial.println("Error desconocido.");
+      if(rReefer == 1) {
+        digitalWrite(PIN_REEFER, LOW); // ON
+        // Master ON -> Motores Manuales OFF (HIGH)
+        digitalWrite(PIN_COMP, HIGH);
+        digitalWrite(PIN_EVAP, HIGH);
+        digitalWrite(PIN_COND, HIGH);
+        digitalWrite(PIN_HEAT, HIGH);
+      } else {
+        digitalWrite(PIN_REEFER, HIGH); // OFF
+        
+        digitalWrite(PIN_COMP, rComp ? LOW : HIGH);
+        digitalWrite(PIN_EVAP, rEvap ? LOW : HIGH);
+        digitalWrite(PIN_COND, rCond ? LOW : HIGH);
+        digitalWrite(PIN_HEAT, rHeat ? LOW : HIGH);
+      }
     }
     http.end();
-  } else {
-    Serial.println("⚠️ WiFi Desconectado!");
   }
-  
   delay(5000); 
 }
