@@ -11,6 +11,8 @@ const int PIN_COMP = 26;
 const int PIN_EVAP = 27;
 const int PIN_COND = 14;
 const int PIN_HEAT = 12;
+
+// RELAY MASTER (Fail-Safe: Usamos el contacto NC)
 const int PIN_REEFER = 13;
 
 // Variables
@@ -27,13 +29,18 @@ WiFiManagerParameter custom_device_id("deviceid", "Nombre del Equipo", device_id
 void setup() {
   Serial.begin(115200);
   
-  // 1. Configurar Pines (Lógica Invertida: HIGH = APAGADO)
+  // 1. Configurar Pines 
   pinMode(PIN_COMP, OUTPUT); pinMode(PIN_EVAP, OUTPUT);
   pinMode(PIN_COND, OUTPUT); pinMode(PIN_HEAT, OUTPUT);
   pinMode(PIN_REEFER, OUTPUT);
   
+  // Motores: HIGH = APAGADO (Módulos Active LOW)
   digitalWrite(PIN_COMP, HIGH); digitalWrite(PIN_EVAP, HIGH);
   digitalWrite(PIN_COND, HIGH); digitalWrite(PIN_HEAT, HIGH);
+  
+  // REEFER MASTER (Fail-Safe):
+  // HIGH = Bobina Desenergizada = Contacto NC Cerrado = REEFER ENCENDIDO
+  // Queremos que por defecto (si se reinicia) arranque prendido.
   digitalWrite(PIN_REEFER, HIGH);
 
   // 2. Cargar nombre
@@ -75,16 +82,18 @@ void loop() {
     
     // --- SIMULACION CORRIENTES TRIFASICAS ---
     float ampR = 15.0; 
-    float ampS = 14.5; // Un poco desbalanceada para realismo
+    float ampS = 14.5; 
     float ampT = 15.2;
 
-    // --- LEER ESTADO REAL (FEEDBACK INVERTIDO) ---
-    // !digitalRead: si lee LOW (0), guarda 1 (ON)
+    // --- LEER ESTADO REAL (FEEDBACK) ---
+    // Motores: !digitalRead (invierte, si lee LOW guarda 1)
     int stComp = !digitalRead(PIN_COMP);
     int stEvap = !digitalRead(PIN_EVAP);
     int stCond = !digitalRead(PIN_COND);
     int stHeat = !digitalRead(PIN_HEAT);
-    int stReefer = !digitalRead(PIN_REEFER);
+    
+    // Reefer: Lectura directa. Si está HIGH (Bobina OFF, NC Cerrado), significa 1 (ON)
+    int stReefer = digitalRead(PIN_REEFER);
 
     // --- JSON ---
     StaticJsonDocument<768> doc;
@@ -93,14 +102,12 @@ void loop() {
     doc["temp_supply"] = tempSupply;
     doc["temp_evap"] = tempEvap;
     
-    // Enviamos las 3 fases
     doc["amp_r"] = ampR; 
     doc["amp_s"] = ampS; 
     doc["amp_t"] = ampT;
     
     doc["rssi"] = WiFi.RSSI();
     
-    // Estados Reales
     doc["real_comp"] = stComp;
     doc["real_evap"] = stEvap;
     doc["real_cond"] = stCond;
@@ -123,24 +130,29 @@ void loop() {
       int rHeat = docRes["relays"]["heat"];
       int rReefer = docRes["relays"]["reefer"];
 
-      // --- ACTUAR (LÓGICA INVERTIDA) ---
-      // Si servidor manda 1 (ON) -> Escribimos LOW
-      // Si servidor manda 0 (OFF) -> Escribimos HIGH
+      // --- ACTUAR (CONTROL FAIL-SAFE REEFER + MOTORES) ---
       
       if(rReefer == 1) {
-        digitalWrite(PIN_REEFER, LOW); // ON
-        // Master ON -> Motores Manuales OFF (HIGH)
-        digitalWrite(PIN_COMP, HIGH);
-        digitalWrite(PIN_EVAP, HIGH);
-        digitalWrite(PIN_COND, HIGH);
-        digitalWrite(PIN_HEAT, HIGH);
-      } else {
-        digitalWrite(PIN_REEFER, HIGH); // OFF
+        // Servidor pide ON. Queremos el NC cerrado.
+        // Escribimos HIGH (Bobina Desenergizada)
+        digitalWrite(PIN_REEFER, HIGH); 
         
+        // Al estar encendido el master, respetamos el estado de los motores
+        // (Para motores: 1=LOW, 0=HIGH)
         digitalWrite(PIN_COMP, rComp ? LOW : HIGH);
         digitalWrite(PIN_EVAP, rEvap ? LOW : HIGH);
         digitalWrite(PIN_COND, rCond ? LOW : HIGH);
         digitalWrite(PIN_HEAT, rHeat ? LOW : HIGH);
+      } else {
+        // Servidor pide OFF. Queremos abrir el circuito NC.
+        // Escribimos LOW (Bobina Energizada)
+        digitalWrite(PIN_REEFER, LOW); 
+        
+        // Forzamos el apagado de los motores manuales
+        digitalWrite(PIN_COMP, HIGH);
+        digitalWrite(PIN_EVAP, HIGH);
+        digitalWrite(PIN_COND, HIGH);
+        digitalWrite(PIN_HEAT, HIGH);
       }
     }
     http.end();
