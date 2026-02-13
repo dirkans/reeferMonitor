@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Reefer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: sans-serif; background: #f4f4f9; text-align: center; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { color: #333; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>❄️ Monitor de Temperatura</h1>
+        <h3>Equipo: <span id="devName">Cargando...</span></h3>
+        <canvas id="miGrafico"></canvas>
+    </div>
+
+    <script>
+        const deviceId = "REEFER_PROTOTIPO_1"; // El ID que pusiste en el ESP32
+        document.getElementById("devName").innerText = deviceId;
+        
+        let chart;
+
+        async function cargarDatos() {
+            const response = await fetch(`/api/historial/${deviceId}`);
+            const datos = await response.json();
+
+            const etiquetas = datos.map(d => new Date(d.fecha).toLocaleTimeString());
+            const valores = datos.map(d => d.temperatura);
+
+            if (chart) {
+                chart.data.labels = etiquetas;
+                chart.data.datasets[0].data = valores;
+                chart.update();
+            } else {
+                const ctx = document.getElementById('miGrafico').getContext('2d');
+                chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: etiquetas,
+                        datasets: [{
+                            label: 'Temperatura (°C)',
+                            data: valores,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.3, // Curvatura de la linea
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        scales: { y: { beginAtZero: false } }
+                    }
+                });
+            }
+        }
+
+        // Cargar al inicio y luego cada 5 segundos
+        cargarDatos();
+        setInterval(cargarDatos, 5000);
+    </script>
+</body>
+</html>
