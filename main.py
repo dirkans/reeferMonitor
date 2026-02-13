@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import mysql.connector
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-
+from typing import Optional
 # --- CONFIGURACION ---
 SECRET_KEY = "tu_secreto_super_seguro_cambialo"
 ALGORITHM = "HS256"
@@ -213,13 +213,38 @@ async def get_estado(device_id: str, current_user: str = Depends(get_current_use
     return {"lectura": lectura, "config": config}
 
 @app.get("/api/historial/{device_id}")
-async def historial(device_id: str, current_user: str = Depends(get_current_user)):
+async def historial(
+    device_id: str, 
+    inicio: Optional[str] = None, 
+    fin: Optional[str] = None, 
+    current_user: str = Depends(get_current_user)
+):
     conn = get_db()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM lecturas WHERE device_id = %s ORDER BY fecha DESC LIMIT 500", (device_id,))
+    
+    # Si no hay fechas, traemos ultimas 24 horas
+    if not inicio or not fin:
+        # Limitamos a 2000 puntos para no explotar el grafico si hay muchos datos
+        cursor.execute("""
+            SELECT * FROM lecturas 
+            WHERE device_id = %s 
+            ORDER BY fecha DESC LIMIT 2000
+        """, (device_id,))
+    else:
+        # Formato esperado: YYYY-MM-DD HH:MM
+        cursor.execute("""
+            SELECT * FROM lecturas 
+            WHERE device_id = %s AND fecha BETWEEN %s AND %s 
+            ORDER BY fecha ASC
+        """, (device_id, inicio, fin))
+        
     res = cursor.fetchall()
     conn.close()
-    return res[::-1]
+    
+    # Si no hubo filtro de fecha, invertimos para que el grafico vaya de izq a der cronologicamente
+    if not inicio:
+        return res[::-1] 
+    return res
 
 @app.get("/my/devices")
 async def get_my_devices(current_user: str = Depends(get_current_user)):
