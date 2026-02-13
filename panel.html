@@ -43,7 +43,6 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="bg-white p-6 rounded shadow overflow-x-auto">
                         <h2 class="text-lg font-bold text-gray-800 mb-4">👤 Usuarios</h2>
@@ -62,22 +61,25 @@
         </div>
 
         <div id="viewDetail" class="hidden">
-            <button onclick="verLista()" class="mb-4 text-blue-600 font-bold hover:underline">← Volver al Listado</button>
+            <button onclick="verLista()" class="mb-4 text-blue-600 font-bold hover:underline flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" /></svg>
+                Volver al Listado
+            </button>
             
             <div class="flex justify-between items-center mb-4 bg-white p-4 rounded shadow">
                 <h2 id="detailTitle" class="text-3xl font-bold text-gray-800">REEFER</h2>
-                <div class="text-right">
-                    <span id="connectionStatus" class="block font-bold">--</span>
-                    <span id="lastUpdate" class="text-xs text-gray-500">Actualizando...</span>
-                </div>
+                <div class="text-right"><span id="connectionStatus" class="block font-bold">--</span><span id="lastUpdate" class="text-xs text-gray-500">Actualizando...</span></div>
             </div>
 
-            <div class="bg-white p-4 rounded shadow mb-6 border-l-4 border-indigo-500 flex flex-wrap gap-4 items-end">
+            <div class="bg-white p-4 rounded shadow mb-6 border-l-4 border-indigo-500 flex flex-wrap gap-4 items-end items-center">
                 <div><label class="block text-xs font-bold text-gray-500">Desde</label><input type="datetime-local" id="dateStart" class="border p-2 rounded text-sm"></div>
                 <div><label class="block text-xs font-bold text-gray-500">Hasta</label><input type="datetime-local" id="dateEnd" class="border p-2 rounded text-sm"></div>
-                <button onclick="aplicarFiltro()" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-500 font-bold shadow">🔍 Filtrar</button>
-                <button onclick="descargarPDF()" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-500 font-bold shadow">📄 PDF</button>
-                <button onclick="resetLive()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 text-sm ml-auto">Volver a Vivo</button>
+                <button onclick="aplicarFiltro()" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-500 font-bold shadow h-10 flex items-center">🔍 Filtrar</button>
+                <button onclick="descargarPDF()" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-500 font-bold shadow h-10 flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg> PDF</button>
+                <button onclick="resetLive()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 text-sm ml-auto h-10 font-bold flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    Quitar filtros (En Vivo)
+                </button>
             </div>
 
             <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
@@ -89,20 +91,16 @@
                 <div class="bg-white p-4 rounded shadow border-l-4 border-yellow-500"><p class="text-gray-500 text-xs uppercase font-bold">Amp T</p><p class="text-2xl font-bold text-gray-800" id="valAmpT">--</p></div>
             </div>
 
-            <div class="bg-white p-4 rounded shadow mb-6">
-                <div class="relative h-80 md:h-96"><canvas id="myChart"></canvas></div>
-            </div>
+            <div class="bg-white p-4 rounded shadow mb-6"><div class="relative h-80 md:h-96"><canvas id="myChart"></canvas></div></div>
 
             <div id="relayPanel" class="bg-white p-6 rounded shadow border-t-4 border-red-500 hidden">
-                <h3 class="text-xl font-bold mb-4 text-red-600">⚠️ Control Manual (Admin)</h3>
-                <div class="mb-4 pb-4 border-b border-gray-200">
-                    <button id="btnReefer" onclick="toggleRelay('reefer')" class="w-full p-4 rounded font-bold text-white bg-gray-400 transition shadow">REEFER MASTER</button>
-                </div>
+                <h3 class="text-xl font-bold mb-4 text-red-600 flex items-center gap-2">⚠️ Control Manual <span class="text-xs font-normal text-gray-500">(Solo Admin)</span></h3>
+                <div class="mb-4 pb-4 border-b border-gray-200"><button id="btnReefer" onclick="toggleRelay('reefer')" class="w-full p-4 rounded font-bold text-white bg-gray-400 transition shadow">REEFER MASTER</button></div>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <button id="btnComp" onclick="toggleRelay('compresor')" class="p-4 rounded font-bold text-white bg-gray-400">Compresor</button>
-                    <button id="btnEvap" onclick="toggleRelay('evaporador')" class="p-4 rounded font-bold text-white bg-gray-400">Evaporador</button>
-                    <button id="btnCond" onclick="toggleRelay('condensador')" class="p-4 rounded font-bold text-white bg-gray-400">Condensador</button>
-                    <button id="btnHeat" onclick="toggleRelay('resistencia')" class="p-4 rounded font-bold text-white bg-gray-400">Resistencias</button>
+                    <button id="btnComp" onclick="toggleRelay('compresor')" class="p-4 rounded font-bold text-white bg-gray-400 transition">Compresor</button>
+                    <button id="btnEvap" onclick="toggleRelay('evaporador')" class="p-4 rounded font-bold text-white bg-gray-400 transition">Evaporador</button>
+                    <button id="btnCond" onclick="toggleRelay('condensador')" class="p-4 rounded font-bold text-white bg-gray-400 transition">Condensador</button>
+                    <button id="btnHeat" onclick="toggleRelay('resistencia')" class="p-4 rounded font-bold text-white bg-gray-400 transition">Resistencias</button>
                 </div>
             </div>
         </div>
@@ -115,37 +113,37 @@
         const isAdmin = payload.admin;
         const username = payload.sub;
         document.getElementById('welcomeMsg').innerText = "Usuario: " + username;
-        
-        let currentDevice = null;
-        let chartInstance = null;
-        let autoRefreshInterval = null;
+        let currentDevice = null; 
+        let chartInstance = null; 
+        let autoRefreshInterval = null; 
         let isHistoricalMode = false;
 
-        if(isAdmin) {
-            document.getElementById('adminPanelContainer').classList.remove('hidden');
-            cargarUsuarios();
-            cargarAsignaciones();
-        }
+        if(isAdmin) document.getElementById('adminPanelContainer').classList.remove('hidden');
+        cargarUsuarios(); 
+        cargarAsignaciones(); 
         cargarLista();
 
-        // --- LISTADO Y BORRADO ---
+        // --- NAV ---
+        function verLista() { 
+            currentDevice = null; 
+            cargarLista(); 
+        }
+
         async function cargarLista() {
-            document.getElementById('viewList').classList.remove('hidden');
+            document.getElementById('viewList').classList.remove('hidden'); 
             document.getElementById('viewDetail').classList.add('hidden');
             if(autoRefreshInterval) clearInterval(autoRefreshInterval);
-
+            
             const res = await fetch('/my/devices', { headers: { 'Authorization': 'Bearer ' + token } });
             if(res.status == 401) logout();
             const list = await res.json();
-            const grid = document.getElementById('deviceGrid');
+            const grid = document.getElementById('deviceGrid'); 
             grid.innerHTML = '';
             
             list.forEach(d => {
                 const isOnline = d.segundos_atras !== null && d.segundos_atras < 60;
                 const statusColor = isOnline ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800";
-                
                 let deleteBtn = isAdmin ? `<button onclick="event.stopPropagation(); borrarEquipo('${d.device_id}')" class="absolute top-4 right-4 text-red-300 hover:text-red-600 transition text-lg p-2" title="Eliminar">🗑️</button>` : '';
-
                 grid.innerHTML += `
                 <div onclick="abrirEquipo('${d.device_id}')" class="relative bg-white p-6 rounded shadow cursor-pointer border-t-4 ${isOnline?'border-blue-600':'border-gray-400'} hover:bg-blue-50 transition">
                     ${deleteBtn}
@@ -157,12 +155,20 @@
                 </div>`;
             });
         }
-        
-        async function borrarEquipo(id) {
-            if(!confirm("⚠️ ¿ELIMINAR " + id + "?\nSe borrará todo el historial.")) return;
-            const res = await fetch('/admin/delete_device', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({device_id:id}) });
-            if(res.ok) { alert("Eliminado"); cargarLista(); } else { alert("Error"); }
+
+        async function borrarEquipo(id) { 
+            if(confirm("⚠️ ¿ELIMINAR " + id + "?\nSe borrará todo el historial.")) {
+                await fetch('/admin/delete_device', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({device_id:id}) }); 
+                cargarLista(); 
+            }
         }
+
+        // --- DETALLE Y FILTROS ---
+        const toLocalISOString = (date) => {
+             const offset = date.getTimezoneOffset() * 60000;
+             const localISOTime = (new Date(date - offset)).toISOString().slice(0, 16);
+             return localISOTime;
+        };
 
         function abrirEquipo(id) {
             currentDevice = id;
@@ -172,142 +178,210 @@
             if(isAdmin) document.getElementById('relayPanel').classList.remove('hidden');
             
             const hoy = new Date();
-            const mesAtras = new Date(); mesAtras.setMonth(hoy.getMonth() - 1);
-            document.getElementById('dateEnd').value = hoy.toISOString().slice(0,16);
-            document.getElementById('dateStart').value = mesAtras.toISOString().slice(0,16);
+            const ayer = new Date(hoy.getTime() - (24 * 60 * 60 * 1000));
+            document.getElementById('dateEnd').value = toLocalISOString(hoy);
+            document.getElementById('dateStart').value = toLocalISOString(ayer);
 
             resetLive();
         }
 
-        function resetLive() {
-            isHistoricalMode = false;
-            cargarDatosDashboard();
-            if(autoRefreshInterval) clearInterval(autoRefreshInterval);
-            autoRefreshInterval = setInterval(cargarDatosDashboard, 5000);
+        function resetLive() { 
+            isHistoricalMode = false; 
+            cargarDatosDashboard(); 
+            if(autoRefreshInterval) clearInterval(autoRefreshInterval); 
+            autoRefreshInterval = setInterval(cargarDatosDashboard, 5000); 
         }
 
         async function aplicarFiltro() {
             isHistoricalMode = true;
             if(autoRefreshInterval) clearInterval(autoRefreshInterval);
-            const ini = document.getElementById('dateStart').value;
-            const fin = document.getElementById('dateEnd').value;
-            const res = await fetch(`/api/historial/${currentDevice}?inicio=${ini}&fin=${fin}`, { headers: { 'Authorization': 'Bearer ' + token } });
+            const iniInput = document.getElementById('dateStart').value; 
+            const finInput = document.getElementById('dateEnd').value;
+
+            if(!iniInput || !finInput) { alert("Seleccione fechas"); return; }
+
+            const iniDate = new Date(iniInput);
+            const finDate = new Date(finInput);
+
+            const iniUTCStr = iniDate.toISOString().slice(0, 19).replace('T', ' ');
+            const finUTCStr = finDate.toISOString().slice(0, 19).replace('T', ' ');
+
+            const res = await fetch(`/api/historial/${currentDevice}?inicio=${iniUTCStr}&fin=${finUTCStr}`, { headers: { 'Authorization': 'Bearer ' + token } });
             const hist = await res.json();
             actualizarGrafico(hist);
         }
 
+        // AQUÍ ESTABA EL ERROR EN EL CÓDIGO ANTERIOR (Faltaba "function")
         async function cargarDatosDashboard() {
             if(isHistoricalMode || !currentDevice) return;
             const res = await fetch('/api/estado_actual/' + currentDevice, { headers: { 'Authorization': 'Bearer ' + token } });
-            const data = await res.json();
+            const data = await res.json(); 
             const lectura = data.lectura;
-
+            
             if(lectura) {
-                document.getElementById('valReturn').innerText = lectura.temperatura.toFixed(1) + "°";
-                document.getElementById('valSupply').innerText = lectura.temp_supply.toFixed(1) + "°";
+                document.getElementById('valReturn').innerText = lectura.temperatura.toFixed(1) + "°"; 
+                document.getElementById('valSupply').innerText = lectura.temp_supply.toFixed(1) + "°"; 
                 document.getElementById('valEvap').innerText = lectura.temp_evap.toFixed(1) + "°";
-                document.getElementById('valAmpR').innerText = lectura.amp_r.toFixed(1) + "A";
-                document.getElementById('valAmpS').innerText = lectura.amp_s.toFixed(1) + "A";
+                document.getElementById('valAmpR').innerText = lectura.amp_r.toFixed(1) + "A"; 
+                document.getElementById('valAmpS').innerText = lectura.amp_s.toFixed(1) + "A"; 
                 document.getElementById('valAmpT').innerText = lectura.amp_t.toFixed(1) + "A";
                 
-                const fecha = new Date(lectura.fecha + "Z");
+                const fecha = new Date(lectura.fecha + "Z"); 
                 document.getElementById('lastUpdate').innerText = fecha.toLocaleTimeString();
-                const diff = (new Date() - fecha)/1000;
-                const st = document.getElementById('connectionStatus');
-                st.innerText = diff < 65 ? "ONLINE" : "OFFLINE";
+                
+                const diff = (new Date() - fecha)/1000; 
+                const st = document.getElementById('connectionStatus'); 
+                st.innerText = diff < 65 ? "ONLINE" : "OFFLINE"; 
                 st.className = diff < 65 ? "block text-green-600 font-bold" : "block text-red-600 font-bold";
-
+                
                 if(isAdmin) {
-                    updateBtn('btnReefer', lectura.real_reefer);
+                    updateBtn('btnReefer', lectura.real_reefer); 
                     const reeferOn = lectura.real_reefer === 1; 
-                    toggleDisabled('btnComp', reeferOn);
-                    toggleDisabled('btnEvap', reeferOn);
-                    toggleDisabled('btnCond', reeferOn);
+                    toggleDisabled('btnComp', reeferOn); 
+                    toggleDisabled('btnEvap', reeferOn); 
+                    toggleDisabled('btnCond', reeferOn); 
                     toggleDisabled('btnHeat', reeferOn);
-                    updateBtn('btnComp', lectura.real_comp);
-                    updateBtn('btnEvap', lectura.real_evap);
-                    updateBtn('btnCond', lectura.real_cond);
+                    updateBtn('btnComp', lectura.real_comp); 
+                    updateBtn('btnEvap', lectura.real_evap); 
+                    updateBtn('btnCond', lectura.real_cond); 
                     updateBtn('btnHeat', lectura.real_heat);
                 }
             }
-            const resHist = await fetch('/api/historial/' + currentDevice, { headers: { 'Authorization': 'Bearer ' + token } });
-            const hist = await resHist.json();
+            const resHist = await fetch('/api/historial/' + currentDevice, { headers: { 'Authorization': 'Bearer ' + token } }); 
+            const hist = await resHist.json(); 
             actualizarGrafico(hist);
         }
 
-        // --- GRAFICOS Y PDF ---
         function actualizarGrafico(data) {
             const ctx = document.getElementById('myChart').getContext('2d');
-            const labels = data.map(d => { const dt=new Date(d.fecha+"Z"); return dt.toLocaleDateString()+' '+dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); });
+            const labels = data.map(d => { 
+                const dt = new Date(d.fecha + "Z"); 
+                return dt.toLocaleDateString() + ' ' + dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); 
+            });
             const datasets = [
-                { label: 'Return', data: data.map(d=>d.temperatura), borderColor: '#2563eb', yAxisID: 'y', pointRadius: 0 },
-                { label: 'Supply', data: data.map(d=>d.temp_supply), borderColor: '#22d3ee', yAxisID: 'y', pointRadius: 0 },
+                { label: 'Return', data: data.map(d=>d.temperatura), borderColor: '#2563eb', yAxisID: 'y', pointRadius: 0 }, 
+                { label: 'Supply', data: data.map(d=>d.temp_supply), borderColor: '#22d3ee', yAxisID: 'y', pointRadius: 0 }, 
                 { label: 'Amp R', data: data.map(d=>d.amp_r), borderColor: '#ef4444', yAxisID: 'y1', pointRadius: 0, borderDash:[5,5], borderWidth:1 }
             ];
-
-            if(chartInstance) { chartInstance.data.labels = labels; chartInstance.data.datasets = datasets; chartInstance.update(); }
-            else {
-                chartInstance = new Chart(ctx, {
-                    type: 'line', data: { labels: labels, datasets: datasets },
-                    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-                        scales: { y: { type:'linear', display:true, position:'left', title:{display:true, text:'Temp °C'} }, y1: { type:'linear', display:true, position:'right', grid:{drawOnChartArea:false}, title:{display:true, text:'Amps'} } },
-                        plugins: { zoom: { zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }, pan: { enabled: true, mode: 'x' } } }
-                    }
-                });
+            
+            if(chartInstance) { 
+                chartInstance.data.labels = labels; 
+                chartInstance.data.datasets = datasets; 
+                chartInstance.update(); 
+            } else { 
+                chartInstance = new Chart(ctx, { 
+                    type: 'line', 
+                    data: { labels: labels, datasets: datasets }, 
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        interaction: { mode: 'index', intersect: false }, 
+                        scales: { 
+                            y: { type:'linear', display:true, position:'left', title:{display:true, text:'Temp °C'} }, 
+                            y1: { type:'linear', display:true, position:'right', grid:{drawOnChartArea:false}, title:{display:true, text:'Amps'} } 
+                        }, 
+                        plugins: { zoom: { zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }, pan: { enabled: true, mode: 'x' } } } 
+                    } 
+                }); 
             }
         }
 
         function descargarPDF() {
-            const { jsPDF } = window.jspdf;
+            const { jsPDF } = window.jspdf; 
             const doc = new jsPDF('landscape');
-            doc.text("Reporte Reefer: " + currentDevice, 10, 10);
-            doc.setFontSize(10); doc.text("Generado: " + new Date().toLocaleString(), 10, 16);
-            const canvas = document.getElementById('myChart');
-            const canvasImg = canvas.toDataURL("image/png", 1.0);
+            doc.text("Reporte Reefer: " + currentDevice, 10, 10); 
+            doc.setFontSize(10); 
+            doc.text("Generado: " + new Date().toLocaleString(), 10, 16);
+            const canvas = document.getElementById('myChart'); 
+            const canvasImg = canvas.toDataURL("image/png", 1.0); 
             doc.addImage(canvasImg, 'PNG', 10, 20, 280, 100); 
-            doc.text("Resumen actual - Return: " + document.getElementById('valReturn').innerText + " | Amp R: " + document.getElementById('valAmpR').innerText, 10, 130);
+            doc.text("Resumen actual - Return: " + document.getElementById('valReturn').innerText + " | Amp R: " + document.getElementById('valAmpR').innerText, 10, 130); 
             doc.save(`Reporte_${currentDevice}.pdf`);
         }
 
-        // --- RELAYS y ADMIN ---
-        function updateBtn(id, realState) {
-            const btn = document.getElementById(id);
-            if(realState === 1) { btn.className = "p-4 rounded font-bold text-white bg-green-600 shadow-lg scale-105"; btn.innerText = btn.innerText.replace(" ON","") + " ON"; } 
-            else { btn.className = btn.disabled ? "p-4 rounded font-bold text-gray-400 bg-gray-800 opacity-50" : "p-4 rounded font-bold text-white bg-gray-400"; btn.innerText = btn.innerText.replace(" ON",""); }
-        }
-        function toggleDisabled(id, disable) { document.getElementById(id).disabled = disable; }
-        async function toggleRelay(n) {
-            const map = {'reefer':'btnReefer', 'compresor':'btnComp', 'evaporador':'btnEvap', 'condensador':'btnCond', 'resistencia':'btnHeat'};
-            const btn = document.getElementById(map[n]);
-            await fetch('/admin/control_relay', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify({ device_id: currentDevice, relay_name: n, state: !btn.classList.contains('bg-green-600') }) });
-            setTimeout(cargarDatosDashboard, 1000);
+        function updateBtn(id, realState) { 
+            const btn = document.getElementById(id); 
+            if(realState === 1) { 
+                btn.className = "p-4 rounded font-bold text-white bg-green-600 transition shadow-lg scale-105"; 
+                btn.innerText = btn.innerText.replace(" ON","") + " ON"; 
+            } else { 
+                btn.className = btn.disabled ? "p-4 rounded font-bold text-gray-400 bg-gray-800 opacity-50" : "p-4 rounded font-bold text-white bg-gray-400 hover:bg-gray-500 transition"; 
+                btn.innerText = btn.innerText.replace(" ON",""); 
+            } 
         }
 
-        async function cargarUsuarios() {
-            const res = await fetch('/admin/users_list', { headers: { 'Authorization': 'Bearer ' + token } });
-            const users = await res.json();
-            const tbody = document.getElementById('usersTableBody'); tbody.innerHTML = '';
-            users.forEach(u => {
-                let btnDel = u.is_admin ? '' : `<button onclick="borrarUsuario(${u.id})" class="text-red-500 hover:text-red-700 font-bold ml-2">🗑️</button>`;
-                tbody.innerHTML += `<tr class="border-b hover:bg-gray-50"><td class="p-2 font-bold">${u.username}</td><td class="p-2 text-xs">${u.is_admin ? '<span class="text-purple-600 font-bold">Admin</span>' : 'Cliente'}</td><td class="p-2 flex items-center"><button onclick="resetPass(${u.id}, '${u.username}')" class="text-orange-500 text-xs hover:underline">Clave</button>${btnDel}</td></tr>`;
-            });
+        function toggleDisabled(id, disable) { document.getElementById(id).disabled = disable; }
+        
+        async function toggleRelay(n) { 
+            const map = {'reefer':'btnReefer', 'compresor':'btnComp', 'evaporador':'btnEvap', 'condensador':'btnCond', 'resistencia':'btnHeat'}; 
+            const btn = document.getElementById(map[n]); 
+            await fetch('/admin/control_relay', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify({ device_id: currentDevice, relay_name: n, state: !btn.classList.contains('bg-green-600') }) }); 
+            setTimeout(cargarDatosDashboard, 1000); 
         }
-        async function cargarAsignaciones() {
-            const res = await fetch('/admin/assignments', { headers: { 'Authorization': 'Bearer ' + token } });
-            const data = await res.json();
-            const tbody = document.getElementById('assignmentsTable'); tbody.innerHTML = '';
-            data.forEach(item => {
-                const st = item.is_active ? ['text-green-600 bg-green-100','ACTIVO','⏸️'] : ['text-red-600 bg-red-100','PAUSA','▶️'];
-                tbody.innerHTML += `<tr class="border-b hover:bg-gray-50"><td class="p-2">${item.username}</td><td class="p-2 font-mono text-xs">${item.device_id}</td><td class="p-2"><span class="text-xs px-2 rounded ${st[0]}">${st[1]}</span></td><td class="p-2"><button onclick="toggleAsig(${item.id})" class="mr-2 hover:bg-gray-200 rounded px-1">${st[2]}</button><button onclick="delAsig(${item.id})" class="text-red-500 hover:text-red-700 font-bold">🗑️</button></td></tr>`;
-            });
+
+        // --- Admin functions ---
+        async function cargarUsuarios() { 
+            const res = await fetch('/admin/users_list', { headers: { 'Authorization': 'Bearer ' + token } }); 
+            const users = await res.json(); 
+            const tbody = document.getElementById('usersTableBody'); 
+            tbody.innerHTML = ''; 
+            users.forEach(u => { 
+                let btnDel = u.is_admin ? '' : `<button onclick="borrarUsuario(${u.id})" class="text-red-500 hover:text-red-700 font-bold ml-2">🗑️</button>`; 
+                tbody.innerHTML += `<tr class="border-b hover:bg-gray-50"><td class="p-2 font-bold">${u.username}</td><td class="p-2 text-xs">${u.is_admin ? '<span class="text-purple-600 font-bold">Admin</span>' : 'Cliente'}</td><td class="p-2 flex items-center"><button onclick="resetPass(${u.id}, '${u.username}')" class="text-orange-500 text-xs hover:underline">Clave</button>${btnDel}</td></tr>`; 
+            }); 
         }
-        async function crearUsuario() { await fetch('/admin/users', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({username:document.getElementById('new_user').value, password:document.getElementById('new_pass').value}) }); cargarUsuarios(); }
-        async function asignarEquipo() { await fetch('/admin/assign', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({username:document.getElementById('assign_user').value, device_id:document.getElementById('assign_device').value}) }); cargarAsignaciones(); }
-        async function borrarUsuario(id) { if(confirm("¿Eliminar usuario?")) { await fetch('/admin/delete_user', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({user_id:id}) }); cargarUsuarios(); } }
-        async function resetPass(id, name) { const p = prompt("Nueva clave para "+name); if(p) await fetch('/admin/reset_password', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({user_id:id, new_password:p}) }); }
-        async function toggleAsig(id) { await fetch('/admin/toggle_active', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({assignment_id:id}) }); cargarAsignaciones(); }
-        async function delAsig(id) { if(confirm("¿Quitar asignación?")) { await fetch('/admin/delete_assignment', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({assignment_id:id}) }); cargarAsignaciones(); } }
-        function logout() { localStorage.clear(); window.location.href = '/login'; }
+
+        async function cargarAsignaciones() { 
+            const res = await fetch('/admin/assignments', { headers: { 'Authorization': 'Bearer ' + token } }); 
+            const data = await res.json(); 
+            const tbody = document.getElementById('assignmentsTable'); 
+            tbody.innerHTML = ''; 
+            data.forEach(item => { 
+                const st = item.is_active ? ['text-green-600 bg-green-100','ACTIVO','⏸️'] : ['text-red-600 bg-red-100','PAUSA','▶️']; 
+                tbody.innerHTML += `<tr class="border-b hover:bg-gray-50"><td class="p-2">${item.username}</td><td class="p-2 font-mono text-xs">${item.device_id}</td><td class="p-2"><span class="text-xs px-2 rounded ${st[0]}">${st[1]}</span></td><td class="p-2"><button onclick="toggleAsig(${item.id})" class="mr-2 hover:bg-gray-200 rounded px-1">${st[2]}</button><button onclick="delAsig(${item.id})" class="text-red-500 hover:text-red-700 font-bold">🗑️</button></td></tr>`; 
+            }); 
+        }
+
+        async function crearUsuario() { 
+            await fetch('/admin/users', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({username:document.getElementById('new_user').value, password:document.getElementById('new_pass').value}) }); 
+            cargarUsuarios(); 
+        }
+
+        async function asignarEquipo() { 
+            await fetch('/admin/assign', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({username:document.getElementById('assign_user').value, device_id:document.getElementById('assign_device').value}) }); 
+            cargarAsignaciones(); 
+        }
+
+        async function borrarUsuario(id) { 
+            if(confirm("¿Eliminar usuario?")) { 
+                await fetch('/admin/delete_user', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({user_id:id}) }); 
+                cargarUsuarios(); 
+            } 
+        }
+
+        async function resetPass(id, name) { 
+            const p = prompt("Nueva clave para "+name); 
+            if(p) {
+                await fetch('/admin/reset_password', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({user_id:id, new_password:p}) }); 
+            }
+        }
+
+        async function toggleAsig(id) { 
+            await fetch('/admin/toggle_active', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({assignment_id:id}) }); 
+            cargarAsignaciones(); 
+        }
+
+        async function delAsig(id) { 
+            if(confirm("¿Quitar asignación?")) { 
+                await fetch('/admin/delete_assignment', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({assignment_id:id}) }); 
+                cargarAsignaciones(); 
+            } 
+        }
+
+        function logout() { 
+            localStorage.clear(); 
+            window.location.href = '/login'; 
+        }
     </script>
 </body>
 </html>
