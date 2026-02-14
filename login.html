@@ -3,43 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Acceso Reefer IoT</title>
+    <title>Login - Reefer Monitor Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="manifest" href="/manifest.json">
 </head>
-<body class="bg-gray-900 text-white flex items-center justify-center h-screen">
-    <div class="bg-gray-800 p-8 rounded shadow-lg w-96">
-        <h1 class="text-2xl font-bold mb-6 text-center">🔐 Iniciar Sesión</h1>
-        <form id="loginForm" class="space-y-4">
-            <input type="text" id="username" placeholder="Usuario" class="w-full p-2 rounded bg-gray-700 border border-gray-600" required>
-            <input type="password" id="password" placeholder="Contraseña" class="w-full p-2 rounded bg-gray-700 border border-gray-600" required>
-            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 p-2 rounded font-bold">Entrar</button>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md border-t-8 border-blue-900">
+        
+        <div class="text-center mb-8">
+            <img src="/logo.jpg" alt="Reefer Monitor Pro" class="mx-auto h-32 object-contain drop-shadow-sm">
+        </div>
+        
+        <form id="loginForm" class="space-y-6">
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Usuario</label>
+                <input type="text" id="username" class="w-full p-3 border border-gray-300 rounded bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-900 focus:border-blue-900 transition outline-none" required>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Contraseña</label>
+                <input type="password" id="password" class="w-full p-3 border border-gray-300 rounded bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-900 focus:border-blue-900 transition outline-none" required>
+            </div>
+            
+            <button type="submit" class="w-full bg-blue-900 text-white font-bold p-3 rounded hover:bg-blue-800 transition shadow-md mt-4 flex justify-center items-center gap-2">
+                Ingresar al Sistema
+            </button>
         </form>
-        <p id="errorMsg" class="text-red-500 text-center mt-4 hidden"></p>
+        
+        <p id="errorMsg" class="text-red-500 text-center mt-6 hidden font-bold text-sm bg-red-50 p-2 rounded border border-red-200">
+            ⚠️ Usuario o contraseña incorrectos
+        </p>
+
+        <div class="mt-8 text-center">
+            <p class="text-xs text-gray-400 font-bold tracking-widest uppercase">Tecnología de Monitoreo Remoto</p>
+        </div>
     </div>
 
     <script>
+        // Si ya está logueado, lo mandamos directo al panel
+        if(localStorage.getItem('token')) {
+            window.location.href = '/panel';
+        }
+
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const user = document.getElementById('username').value;
-            const pass = document.getElementById('password').value;
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
             
             const formData = new URLSearchParams();
-            formData.append('username', user);
-            formData.append('password', pass);
+            formData.append('username', u);
+            formData.append('password', p);
 
             const res = await fetch('/token', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: formData
             });
 
             if (res.ok) {
                 const data = await res.json();
                 localStorage.setItem('token', data.access_token);
-                localStorage.setItem('username', user);
-                window.location.href = '/panel'; // Redirigir al panel
+                window.location.href = '/panel';
             } else {
-                document.getElementById('errorMsg').innerText = "Usuario o clave incorrectos";
                 document.getElementById('errorMsg').classList.remove('hidden');
             }
         });

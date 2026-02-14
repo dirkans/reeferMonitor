@@ -1,67 +1,197 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitor Reefer</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Reefer Monitor Pro | Inteligencia en Cadena de Frío</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link rel="icon" href="/icon.png" type="image/png">
+    
     <style>
-        body { font-family: sans-serif; background: #f4f4f9; text-align: center; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h1 { color: #333; }
+        /* Efecto de vidrio esmerilado para la barra superior */
+        .glass-nav {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* Gradiente de texto premium */
+        .text-gradient {
+            background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        /* Fondo oscuro inmersivo */
+        body { background-color: #020617; color: #f8fafc; overflow-x: hidden; }
     </style>
 </head>
-<body>
+<body class="antialiased selection:bg-blue-500 selection:text-white">
 
-    <div class="container">
-        <h1>❄️ Monitor de Temperatura</h1>
-        <h3>Equipo: <span id="devName">Cargando...</span></h3>
-        <canvas id="miGrafico"></canvas>
-    </div>
+    <nav class="fixed w-full z-50 glass-nav transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-20">
+                <div class="flex items-center gap-3 cursor-pointer" onclick="window.scrollTo(0,0)">
+                    <img src="/logo.jpg" alt="Logo" class="h-10 w-10 object-cover rounded shadow-lg bg-white p-0.5">
+                    <span class="font-bold text-xl tracking-tight text-white">Reefer<span class="text-blue-400">Pro</span></span>
+                </div>
+                <div class="hidden md:flex space-x-8 items-center">
+                    <a href="#tecnologia" class="text-sm font-medium text-gray-300 hover:text-white transition">Tecnología</a>
+                    <a href="#seguridad" class="text-sm font-medium text-gray-300 hover:text-white transition">Seguridad</a>
+                    <a href="#alertas" class="text-sm font-medium text-gray-300 hover:text-white transition">Sistema Push</a>
+                    <a href="/login" class="inline-flex items-center justify-center px-6 py-2 border border-transparent text-sm font-bold rounded-full text-white bg-blue-600 hover:bg-blue-500 shadow-[0_0_15px_rgba(37,99,235,0.5)] transition-all transform hover:scale-105">
+                        Portal Clientes ➔
+                    </a>
+                </div>
+                <div class="md:hidden">
+                    <a href="/login" class="text-sm font-bold text-blue-400 hover:text-blue-300 border border-blue-400 px-4 py-2 rounded-full">Login</a>
+                </div>
+            </div>
+        </div>
+    </nav>
 
-    <script>
-        const deviceId = "REEFER_PROTOTIPO_1"; // El ID que pusiste en el ESP32
-        document.getElementById("devName").innerText = deviceId;
+    <section class="relative min-h-screen flex items-center justify-center pt-20 overflow-hidden">
+        <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-20 animate-pulse"></div>
+        <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-20"></div>
         
-        let chart;
+        <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center" data-aos="zoom-out" data-aos-duration="1500">
+            <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-6">
+                El control absoluto de tu <br />
+                <span class="text-gradient">Cadena de Frío.</span>
+            </h1>
+            <p class="mt-4 max-w-2xl text-xl md:text-2xl text-gray-400 mx-auto mb-10 font-light">
+                Monitoreo industrial en tiempo real, accionamiento remoto de motores. Prevención de fallos mediante análisis de corrientes trifásicas.
+            </p>
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <a href="#descubrir" class="px-8 py-4 text-lg font-bold rounded-full text-white bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 transition-all">
+                    Descubrir la tecnología ↓
+                </a>
+            </div>
+        </div>
+    </section>
 
-        async function cargarDatos() {
-            const response = await fetch(`/api/historial/${deviceId}`);
-            const datos = await response.json();
+    <section id="descubrir" class="py-32 bg-[#020617]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
+                <div data-aos="fade-right" data-aos-duration="1000">
+                    <h2 class="text-3xl md:text-5xl font-bold mb-6 leading-tight">Mucho más que <br>un termómetro.</h2>
+                    <p class="text-lg text-gray-400 mb-6 font-light">
+                        Mientras otros sistemas solo te dicen si hace calor o frío, Reefer Monitor Pro lee el pulso vital de tu equipo. Analizamos las corrientes trifásicas de los compresores y la temperatura del evaporador para predecir fallos mecánicos antes de que rompan la cadena de frío.
+                    </p>
+                    <ul class="space-y-4 text-gray-300">
+                        <li class="flex items-center gap-3">✓ <span class="font-bold text-white">Return & Supply</span> con precisión decimal.</li>
+                        <li class="flex items-center gap-3">✓ <span class="font-bold text-white">Análisis Trifásico</span> (Amp R, S, T) en tiempo real.</li>
+                        <li class="flex items-center gap-3">✓ <span class="font-bold text-white">Reportes Automáticos</span> exportables en PDF.</li>
+                    </ul>
+                </div>
+                <div class="relative" data-aos="fade-left" data-aos-duration="1000">
+                    <div class="absolute -inset-4 bg-blue-500/20 blur-2xl -z-10 rounded-full"></div>
+                    
+                    <div class="rounded-2xl overflow-hidden shadow-2xl border border-slate-700 relative z-10 transform transition hover:scale-105 duration-500">
+                        <img src="/dashboard.png" alt="Panel de control Reefer Monitor Pro" class="w-full h-auto object-cover">
+                        <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-40 pointer-events-none"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-            const etiquetas = datos.map(d => new Date(d.fecha).toLocaleTimeString());
-            const valores = datos.map(d => d.temperatura);
+    <section id="seguridad" class="py-32 bg-slate-900 relative border-y border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center" data-aos="fade-up" data-aos-duration="1000">
+            <h2 class="text-3xl md:text-5xl font-bold mb-6">El control en tus manos. <br><span class="text-blue-400">La seguridad en el hardware.</span></h2>
+            <p class="text-lg text-gray-400 max-w-3xl mx-auto mb-16">
+                A diferencia de los monitores pasivos, Reefer Monitor Pro te permite tomar acción. Apagá y encendé motores, evaporadores o resistencias desde tu teléfono.
+            </p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
+                <div class="bg-slate-800 p-8 rounded-2xl border border-slate-700 hover:border-blue-500 transition-colors" data-aos="zoom-in" data-aos-delay="100">
+                    <div class="text-4xl mb-4">🛡️</div>
+                    <h3 class="text-xl font-bold mb-3 text-white">Arquitectura Fail-Safe</h3>
+                    <p class="text-gray-400 text-sm">Diseñado con relays de contacto Normalmente Cerrado. Si el sistema o el internet fallan por completo, el equipo se autoprotege y sigue enfriando. Nunca vas a perder carga por un error de red.</p>
+                </div>
+                <div class="bg-slate-800 p-8 rounded-2xl border border-slate-700 hover:border-blue-500 transition-colors" data-aos="zoom-in" data-aos-delay="200">
+                    <div class="text-4xl mb-4">⚡</div>
+                    <h3 class="text-xl font-bold mb-3 text-white">Control Individual</h3>
+                    <p class="text-gray-400 text-sm">Gestiona remotamente compresores, forzadores y resistencias de descongelamiento de manera individual, ideal para diagnósticos técnicos a distancia.</p>
+                </div>
+                <div class="bg-slate-800 p-8 rounded-2xl border border-slate-700 hover:border-blue-500 transition-colors" data-aos="zoom-in" data-aos-delay="300">
+                    <div class="text-4xl mb-4">🔋</div>
+                    <h3 class="text-xl font-bold mb-3 text-white">Inmune a Cortes</h3>
+                    <p class="text-gray-400 text-sm">Gracias al respaldo UPS-USB y rutinas internas de Watchdog, el cerebro electrónico (ESP32) sobrevive a cortes eléctricos y de red, reconectándose automáticamente.</p>
+                </div>
+            </div>
+        </div>
+    </section>
 
-            if (chart) {
-                chart.data.labels = etiquetas;
-                chart.data.datasets[0].data = valores;
-                chart.update();
+    <section id="alertas" class="py-32 bg-[#020617] overflow-hidden">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-16 items-center flex-row-reverse">
+                <div class="relative mx-auto w-64 h-[500px] border-8 border-slate-800 rounded-[2.5rem] bg-slate-900 shadow-2xl flex items-center justify-center overflow-hidden" data-aos="fade-up" data-aos-duration="1000">
+                    <div class="absolute top-0 w-full h-full bg-slate-900 pt-16 px-4">
+                        <div class="bg-white/10 backdrop-blur-xl p-4 rounded-2xl border border-white/20 shadow-lg transform translate-y-4" data-aos="slide-down" data-aos-delay="600" data-aos-duration="800">
+                            <div class="flex items-center gap-3 mb-2">
+                                <img src="/icon.png" class="w-6 h-6 rounded">
+                                <span class="text-white text-xs font-bold">ReeferPro</span>
+                                <span class="text-gray-400 text-xs ml-auto">ahora</span>
+                            </div>
+                            <h4 class="text-white font-bold text-sm">⚠️ Alarma de Temperatura</h4>
+                            <p class="text-gray-300 text-xs mt-1">El equipo A-102 superó el setpoint (-15°C) durante más de 60 minutos.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div data-aos="fade-up" data-aos-duration="1000">
+                    <h2 class="text-3xl md:text-5xl font-bold mb-6">Duerme tranquilo.<br>Nosotros vigilamos.</h2>
+                    <p class="text-lg text-gray-400 mb-6 font-light">
+                        No necesitas estar mirando la pantalla todo el día. Nuestro motor de Inteligencia en la Nube analiza los ciclos de descongelamiento (Defrost) y los tiempos de enfriamiento. 
+                    </p>
+                    <p class="text-lg text-gray-400 mb-8 font-light">
+                        Si algo se sale realmente de los parámetros seguros, recibirás una <b>Notificación Push Nativa</b> directamente en la pantalla de bloqueo de tu Android o iPhone al instante.
+                    </p>
+                    <a href="/login" class="text-blue-400 font-bold text-lg hover:text-blue-300 transition flex items-center gap-2">
+                        Instalar la PWA en mi celular ➔
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="bg-slate-950 py-12 border-t border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center md:text-left">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
+                <div>
+                    <div class="flex items-center justify-center md:justify-start gap-2 mb-4">
+                        <img src="/icon.png" class="w-8 h-8 rounded">
+                        <span class="font-bold text-xl text-white">Reefer Monitor Pro</span>
+                    </div>
+                    <p class="text-sm text-gray-500">Diseñado y ensamblado para las exigencias de la industria logística global.</p>
+                </div>
+                <div class="text-center md:text-right md:col-span-2">
+                    <p class="text-gray-500 text-sm">© 2026 Reefer Monitor Pro. Todos los derechos reservados.</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script>
+        // Inicializar animaciones de Scroll
+        AOS.init({
+            once: true, // La animación solo sucede la primera vez que bajas
+            offset: 50, // Píxeles de margen antes de disparar la animación
+        });
+
+        // Efecto para la barra de navegación al hacer scroll (la hace más opaca)
+        window.addEventListener('scroll', () => {
+            const nav = document.querySelector('nav');
+            if(window.scrollY > 20) {
+                nav.style.background = 'rgba(15, 23, 42, 0.95)';
+                nav.style.boxShadow = '0 4px 30px rgba(0, 0, 0, 0.5)';
             } else {
-                const ctx = document.getElementById('miGrafico').getContext('2d');
-                chart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: etiquetas,
-                        datasets: [{
-                            label: 'Temperatura (°C)',
-                            data: valores,
-                            borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            borderWidth: 2,
-                            tension: 0.3, // Curvatura de la linea
-                            fill: true
-                        }]
-                    },
-                    options: {
-                        scales: { y: { beginAtZero: false } }
-                    }
-                });
+                nav.style.background = 'rgba(15, 23, 42, 0.8)';
+                nav.style.boxShadow = 'none';
             }
-        }
-
-        // Cargar al inicio y luego cada 5 segundos
-        cargarDatos();
-        setInterval(cargarDatos, 5000);
+        });
     </script>
 </body>
 </html>

@@ -68,7 +68,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         if username is None: raise HTTPException(status_code=401)
     except JWTError: raise HTTPException(status_code=401)
     return {"username": username, "role": role}
-
+@app.get("/", response_class=HTMLResponse)
+async def ver_index(): return FileResponse("index.html")
 @app.get("/login", response_class=HTMLResponse)
 async def ver_login(): return FileResponse("login.html")
 @app.get("/panel", response_class=HTMLResponse)
@@ -77,6 +78,12 @@ async def ver_panel(): return FileResponse("panel.html")
 async def serve_sw(): return FileResponse("sw.js", media_type="application/javascript")
 @app.get("/manifest.json")
 async def serve_manifest(): return FileResponse("manifest.json", media_type="application/json")
+@app.get("/logo.jpg")
+async def serve_logo(): return FileResponse("logo.jpg", media_type="image/jpeg")
+@app.get("/icon.png")
+async def serve_icon(): return FileResponse("icon.png", media_type="image/png")
+@app.get("/dashboard.png")
+async def serve_dashboard(): return FileResponse("dashboard.png", media_type="image/png")
 
 
 @app.post("/token", response_model=Token)
