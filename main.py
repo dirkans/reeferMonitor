@@ -8,6 +8,17 @@ from typing import Optional
 import mysql.connector
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from pywebpush import webpush, WebPushException
+import json
+
+# PEGA TUS LLAVES DE VAPIDKEYS.COM AQUI:
+VAPID_PUBLIC_KEY = "BFcBoXl5oQ6kCA345y5SzPgCgSrEAnaCDWwim65ajHYh126uj6HwNCxPAIta0urS4rC_i2gODtF1SXVbtOvlcmg"
+VAPID_PRIVATE_KEY = "t4YJklmeFN8ZilDCJxgYR_jOyzWEOV803BrtVBkKVW8"
+VAPID_CLAIMS = {"sub": "mailto:dirkans@hotmail.com"}
+
+class PushSubscription(BaseModel):
+    endpoint: str
+    keys: dict
 
 # --- CONFIGURACION ---
 SECRET_KEY = "tu_secreto_super_seguro_cambialo"
@@ -55,6 +66,11 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 async def ver_login(): return FileResponse("login.html")
 @app.get("/panel", response_class=HTMLResponse)
 async def ver_panel(): return FileResponse("panel.html")
+@app.get("/sw.js")
+async def serve_sw(): return FileResponse("sw.js", media_type="application/javascript")
+@app.get("/manifest.json")
+async def serve_manifest(): return FileResponse("manifest.json", media_type="application/json")
+
 
 @app.post("/token", response_model=Token)
 async def login(form: OAuth2PasswordRequestForm = Depends()):
@@ -179,3 +195,30 @@ async def create_user(new_user: UserCreate, current_user: dict = Depends(get_cur
 async def assign_device(assignment: DeviceAssign, current_user: dict = Depends(get_current_user)): 
     if current_user['role'] not in ['super_admin', 'admin']: raise HTTPException(status_code=403)
     conn = get_db(); cursor = conn.cursor(); cursor.execute("SELECT id FROM users WHERE username = %s", (assignment.username,)); row = cursor.fetchone(); cursor.execute("INSERT INTO user_devices (user_id, device_id) VALUES (%s, %s)", (row[0], assignment.device_id)); conn.commit(); conn.close(); return {"msg": "Asignado"}
+
+@app.post("/api/subscribe")
+async def subscribe_push(sub: PushSubscription, current_user: dict = Depends(get_current_user)):
+    conn = get_db(); cursor = conn.cursor()
+    cursor.execute("SELECT id FROM push_subscriptions WHERE endpoint = %s", (sub.endpoint,))
+    if not cursor.fetchone():
+        cursor.execute("INSERT INTO push_subscriptions (username, endpoint, p256dh, auth) VALUES (%s, %s, %s, %s)",
+                       (current_user['username'], sub.endpoint, sub.keys['p256dh'], sub.keys['auth']))
+        conn.commit()
+    conn.close(); return {"msg": "Suscrito ok"}
+
+@app.post("/api/test_push")
+async def test_push(current_user: dict = Depends(get_current_user)):
+    conn = get_db(); cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM push_subscriptions WHERE username = %s", (current_user['username'],))
+    subs = cursor.fetchall(); conn.close()
+    
+    if not subs: raise HTTPException(status_code=400, detail="Dispositivo no suscrito a notificaciones")
+    
+    payload = {"title": "⚠️ Alerta de Reefer Pro", "body": "¡Las notificaciones Push están funcionando perfectamente!"}
+    for s in subs:
+        try:
+            webpush(subscription_info={"endpoint": s['endpoint'], "keys": {"p256dh": s['p256dh'], "auth": s['auth']}},
+                    data=json.dumps(payload), vapid_private_key=VAPID_PRIVATE_KEY, vapid_claims=VAPID_CLAIMS)
+        except WebPushException as ex:
+            print("Error enviando push:", repr(ex))
+    return {"msg": "Enviado"}

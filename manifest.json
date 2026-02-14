@@ -1,0 +1,15 @@
+{
+    "name": "Reefer Monitor Pro",
+    "short_name": "ReeferPro",
+    "start_url": "/panel",
+    "display": "standalone",
+    "background_color": "#1e3a8a",
+    "theme_color": "#1e3a8a",
+    "icons": [
+        {
+            "src": "https://cdn-icons-png.flaticon.com/512/2333/2333203.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}

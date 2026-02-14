@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reefer Monitor Pro</title>
+    <link rel="manifest" href="/manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
@@ -80,6 +81,8 @@
                 <div><label class="block text-xs font-bold text-gray-500">Hasta</label><input type="datetime-local" id="dateEnd" class="border p-2 rounded text-sm"></div>
                 <button onclick="aplicarFiltro()" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-500 font-bold shadow h-10 flex items-center">🔍 Filtrar</button>
                 <button onclick="descargarPDF()" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-500 font-bold shadow h-10 flex items-center gap-1">📄 PDF</button>
+                <button onclick="suscribirPush()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-500 font-bold shadow h-10 flex items-center gap-1">🔔 Activar Alertas</button>
+                <button onclick="probarPush()" class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-500 font-bold shadow h-10 flex items-center gap-1">📲 Test Push</button>
                 <button onclick="resetLive()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 text-sm ml-auto h-10 font-bold flex items-center gap-1">Quitar filtros (En Vivo)</button>
             </div>
 
@@ -247,7 +250,7 @@
         async function cargarUsuarios() { 
             const res = await fetch('/admin/users_list', { headers: { 'Authorization': 'Bearer ' + token } }); const users = await res.json(); const tbody = document.getElementById('usersTableBody'); tbody.innerHTML = ''; 
             users.forEach(u => { 
-                let rolText = u.role === 'super_admin' ? '<span class="text-purple-600 font-bold">S. Admin</span>' : (u.role === 'admin' ? '<span class="text-blue-600 font-bold">Admin</span>' : 'Cliente');
+                let rolText = u.role === 'super_admin' ? '<span class="text-purple-600 font-bold">Admin</span>' : (u.role === 'admin' ? '<span class="text-blue-600 font-bold">Admin</span>' : 'Cliente');
                 let btnDel = isSuperAdmin ? `<button onclick="borrarUsuario(${u.id})" class="text-red-500 hover:text-red-700 font-bold ml-2">🗑️</button>` : ''; 
                 tbody.innerHTML += `<tr class="border-b hover:bg-gray-50"><td class="p-2 font-bold">${u.username}</td><td class="p-2 text-xs">${rolText}</td><td class="p-2 flex items-center"><button onclick="resetPass(${u.id}, '${u.username}')" class="text-orange-500 text-xs hover:underline">Clave</button>${btnDel}</td></tr>`; 
             }); 
@@ -261,6 +264,40 @@
         async function toggleAsig(id) { await fetch('/admin/toggle_active', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({assignment_id:id}) }); cargarAsignaciones(); }
         async function delAsig(id) { if(confirm("¿Quitar asignación?")) { await fetch('/admin/delete_assignment', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({assignment_id:id}) }); cargarAsignaciones(); } }
         
+const publicVapidKey = 'BFcBoXl5oQ6kCA345y5SzPgCgSrEAnaCDWwim65ajHYh126uj6HwNCxPAIta0urS4rC_i2gODtF1SXVbtOvlcmg';
+
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) { outputArray[i] = rawData.charCodeAt(i); }
+            return outputArray;
+        }
+
+        async function suscribirPush() {
+            if ('serviceWorker' in navigator && 'PushManager' in window) {
+                try {
+                    const register = await navigator.serviceWorker.register('/sw.js');
+                    const subscription = await register.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+                    });
+                    await fetch('/api/subscribe', {
+                        method: 'POST', body: JSON.stringify(subscription),
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }
+                    });
+                    alert('¡Notificaciones activadas en este dispositivo!');
+                } catch (err) { console.error(err); alert('Error. ¿Estás usando HTTPS?'); }
+            } else { alert('Tu navegador no soporta Notificaciones Push.'); }
+        }
+
+        async function probarPush() {
+            const res = await fetch('/api/test_push', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } });
+            if(!res.ok) alert("Debes activar las alertas primero.");
+        }
+
+
         // CERRAR SESIÓN Y LIMPIAR TOKEN VIEJO
         function logout() { localStorage.clear(); window.location.href = '/login'; }
     </script>
