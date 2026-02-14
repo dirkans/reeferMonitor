@@ -56,13 +56,30 @@
                     </div>
                 </div>
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div class="bg-white p-6 rounded shadow overflow-x-auto">
-                        <h2 class="text-lg font-bold text-gray-800 mb-4">👤 Usuarios</h2>
-                        <table class="w-full text-left text-sm"><thead class="bg-gray-200"><tr><th class="p-2">User</th><th class="p-2">Rol</th><th class="p-2">Acción</th></tr></thead><tbody id="usersTableBody"></tbody></table>
+                    <div class="bg-white p-6 rounded shadow overflow-x-auto flex flex-col justify-between">
+                        <div>
+                            <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-2">
+                                <h2 class="text-lg font-bold text-gray-800">👤 Usuarios</h2>
+                                <input type="text" id="searchUsers" oninput="renderUsuarios()" placeholder="🔍 Buscar usuario o rol..." class="border p-2 rounded text-sm w-full sm:w-1/2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <table class="w-full text-left text-sm"><thead class="bg-gray-200"><tr><th class="p-2">User</th><th class="p-2">Rol</th><th class="p-2">Acción</th></tr></thead>
+                                <tbody id="usersTableBody"></tbody>
+                            </table>
+                        </div>
+                        <div id="paginationUsers" class="mt-4 pt-4 border-t flex justify-between items-center text-sm text-gray-600 font-bold"></div>
                     </div>
-                    <div class="bg-white p-6 rounded shadow overflow-x-auto">
-                        <h2 class="text-lg font-bold text-gray-800 mb-4">📋 Asignaciones</h2>
-                        <table class="w-full text-left text-sm"><thead class="bg-gray-200"><tr><th class="p-2">Cliente</th><th class="p-2">Equipo</th><th class="p-2">Estado</th><th class="p-2">Acción</th></tr></thead><tbody id="assignmentsTable"></tbody></table>
+
+                    <div class="bg-white p-6 rounded shadow overflow-x-auto flex flex-col justify-between">
+                        <div>
+                            <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-2">
+                                <h2 class="text-lg font-bold text-gray-800">📋 Asignaciones</h2>
+                                <input type="text" id="searchAssignments" oninput="renderAsignaciones()" placeholder="🔍 Buscar equipo o cliente..." class="border p-2 rounded text-sm w-full sm:w-1/2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            <table class="w-full text-left text-sm"><thead class="bg-gray-200"><tr><th class="p-2">Cliente</th><th class="p-2">Equipo</th><th class="p-2">Estado</th><th class="p-2">Acción</th></tr></thead>
+                                <tbody id="assignmentsTable"></tbody>
+                            </table>
+                        </div>
+                        <div id="paginationAssignments" class="mt-4 pt-4 border-t flex justify-between items-center text-sm text-gray-600 font-bold"></div>
                     </div>
                 </div>
                 <hr class="my-8 border-gray-300">
@@ -158,6 +175,12 @@
 
         document.getElementById('welcomeMsg').innerText = "Usuario: " + username + " (" + role + ")";
         let currentDevice = null; let chartInstance = null; let autoRefreshInterval = null; let isHistoricalMode = false;
+        let currentDeviceConfig = null; // NUEVO: Memoria para el umbral de alertas
+        let allUsers = []; 
+        let allAssignments = [];
+        let currentPageUsers = 1; 
+        let currentPageAssignments = 1;
+        const itemsPerPage = 5;
 
         // Mostrar paneles segun rol
         if(isAdmin) {
@@ -286,27 +309,84 @@
         async function cargarDatosDashboard() {
             if(isHistoricalMode || !currentDevice) return;
             const res = await fetch('/api/estado_actual/' + currentDevice, { headers: { 'Authorization': 'Bearer ' + token } });
-            const data = await res.json(); const lectura = data.lectura;
+            const data = await res.json(); 
+            const lectura = data.lectura;
+            
+            // Guardamos la configuración de forma global para usarla en el gráfico
+            currentDeviceConfig = data.config; 
+            
             if(lectura) {
                 document.getElementById('valReturn').innerText = lectura.temperatura.toFixed(1) + "°"; document.getElementById('valSupply').innerText = lectura.temp_supply.toFixed(1) + "°"; document.getElementById('valEvap').innerText = lectura.temp_evap.toFixed(1) + "°";
                 document.getElementById('valAmpR').innerText = lectura.amp_r.toFixed(1) + "A"; document.getElementById('valAmpS').innerText = lectura.amp_s.toFixed(1) + "A"; document.getElementById('valAmpT').innerText = lectura.amp_t.toFixed(1) + "A";
                 const fecha = new Date(lectura.fecha + "Z"); document.getElementById('lastUpdate').innerText = fecha.toLocaleTimeString();
                 const diff = (new Date() - fecha)/1000; const st = document.getElementById('connectionStatus'); st.innerText = diff < 65 ? "ONLINE" : "OFFLINE"; st.className = diff < 65 ? "block text-green-600 font-bold" : "block text-red-600 font-bold";
                 if(isAdmin) {
-                    updateBtn('btnReefer', lectura.real_reefer); const reeferOn = lectura.real_reefer === 1; 
-                    toggleDisabled('btnComp', reeferOn); toggleDisabled('btnEvap', reeferOn); toggleDisabled('btnCond', reeferOn); toggleDisabled('btnHeat', reeferOn);
-                    updateBtn('btnComp', lectura.real_comp); updateBtn('btnEvap', lectura.real_evap); updateBtn('btnCond', lectura.real_cond); updateBtn('btnHeat', lectura.real_heat);
+                    actualizarBotonesUI(lectura, data.config);
                 }
             }
-            const resHist = await fetch('/api/historial/' + currentDevice, { headers: { 'Authorization': 'Bearer ' + token } }); actualizarGrafico(await resHist.json());
+            const resHist = await fetch('/api/historial/' + currentDevice, { headers: { 'Authorization': 'Bearer ' + token } }); 
+            actualizarGrafico(await resHist.json());
         }
 
         function actualizarGrafico(data) {
             const ctx = document.getElementById('myChart').getContext('2d');
             const labels = data.map(d => { const dt = new Date(d.fecha + "Z"); return dt.toLocaleDateString() + ' ' + dt.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}); });
-            const datasets = [{ label: 'Return', data: data.map(d=>d.temperatura), borderColor: '#2563eb', yAxisID: 'y', pointRadius: 0 }, { label: 'Supply', data: data.map(d=>d.temp_supply), borderColor: '#22d3ee', yAxisID: 'y', pointRadius: 0 }, { label: 'Amp R', data: data.map(d=>d.amp_r), borderColor: '#ef4444', yAxisID: 'y1', pointRadius: 0, borderDash:[5,5], borderWidth:1 }];
-            if(chartInstance) { chartInstance.data.labels = labels; chartInstance.data.datasets = datasets; chartInstance.update(); } 
-            else { chartInstance = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: datasets }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, scales: { y: { type:'linear', display:true, position:'left', title:{display:true, text:'Temp °C'} }, y1: { type:'linear', display:true, position:'right', grid:{drawOnChartArea:false}, title:{display:true, text:'Amps'} } }, plugins: { zoom: { zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }, pan: { enabled: true, mode: 'x' } } } } }); }
+            
+            // Calculamos la línea de alerta térmica
+            let limiteMaximo = null;
+            if (currentDeviceConfig) {
+                limiteMaximo = currentDeviceConfig.setpoint + currentDeviceConfig.tolerancia_temp;
+            }
+
+            if(chartInstance) { 
+                // 1. Actualizamos SOLO las etiquetas (eje X)
+                chartInstance.data.labels = labels; 
+                
+                // 2. Actualizamos SOLO los datos internos (eje Y)
+                // Al no tocar el objeto completo, se conserva el Zoom y los clics del usuario
+                chartInstance.data.datasets[0].data = data.map(d=>d.temperatura); // Return
+                chartInstance.data.datasets[1].data = data.map(d=>d.temp_supply); // Supply
+                chartInstance.data.datasets[2].data = data.map(d=>d.temp_evap);   // Evap
+                chartInstance.data.datasets[3].data = data.map(()=>limiteMaximo); // Límite Alerta
+                chartInstance.data.datasets[4].data = data.map(d=>d.amp_r);       // Amp R
+                chartInstance.data.datasets[5].data = data.map(d=>d.amp_s);       // Amp S
+                chartInstance.data.datasets[6].data = data.map(d=>d.amp_t);       // Amp T
+
+                // 3. Actualizamos de forma "suave" ('none' evita que la animación resetee el zoom)
+                chartInstance.update('none'); 
+            } 
+            else { 
+                // Si es la primera vez que se abre la página, creamos todo desde cero
+                const datasets = [
+                    { label: 'Return', data: data.map(d=>d.temperatura), borderColor: '#2563eb', backgroundColor: '#2563eb', yAxisID: 'y', pointRadius: 0, borderWidth: 2 },
+                    { label: 'Supply', data: data.map(d=>d.temp_supply), borderColor: '#22d3ee', backgroundColor: '#22d3ee', yAxisID: 'y', pointRadius: 0, borderWidth: 2 },
+                    { label: 'Evaporador', data: data.map(d=>d.temp_evap), borderColor: '#8b5cf6', backgroundColor: '#8b5cf6', yAxisID: 'y', pointRadius: 0, borderWidth: 2, hidden: true },
+                    
+                    { label: 'Límite Alerta', data: data.map(()=>limiteMaximo), borderColor: '#ef4444', backgroundColor: '#ef4444', yAxisID: 'y', pointRadius: 0, borderDash:[10,5], borderWidth: 2, hidden: true },
+                    
+                    { label: 'Amp R', data: data.map(d=>d.amp_r), borderColor: '#f87171', backgroundColor: '#f87171', yAxisID: 'y1', pointRadius: 0, borderDash:[3,3], borderWidth: 2 },
+                    { label: 'Amp S', data: data.map(d=>d.amp_s), borderColor: '#fb923c', backgroundColor: '#fb923c', yAxisID: 'y1', pointRadius: 0, borderDash:[3,3], borderWidth: 2, hidden: true },
+                    { label: 'Amp T', data: data.map(d=>d.amp_t), borderColor: '#facc15', backgroundColor: '#facc15', yAxisID: 'y1', pointRadius: 0, borderDash:[3,3], borderWidth: 2, hidden: true }
+                ];
+
+                chartInstance = new Chart(ctx, { 
+                    type: 'line', 
+                    data: { labels: labels, datasets: datasets }, 
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        interaction: { mode: 'index', intersect: false }, 
+                        scales: { 
+                            y: { type:'linear', display:true, position:'left', title:{display:true, text:'Temp °C', color:'#64748b'} }, 
+                            y1: { type:'linear', display:true, position:'right', grid:{drawOnChartArea:false}, title:{display:true, text:'Amperaje (A)', color:'#64748b'} } 
+                        }, 
+                        plugins: { 
+                            zoom: { zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }, pan: { enabled: true, mode: 'x' } },
+                            legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8, padding: 15 } }
+                        } 
+                    } 
+                }); 
+            }
         }
 
         function descargarPDF() {
@@ -334,10 +414,81 @@
             doc.save(`Reporte_${currentDevice}.pdf`);
         }
 
-        function updateBtn(id, realState) { const btn = document.getElementById(id); if(realState === 1) { btn.className = "p-4 rounded font-bold text-white bg-green-600 transition shadow-lg scale-105"; btn.innerText = btn.innerText.replace(" ON","") + " ON"; } else { btn.className = btn.disabled ? "p-4 rounded font-bold text-gray-400 bg-gray-800 opacity-50" : "p-4 rounded font-bold text-white bg-gray-400 hover:bg-gray-500 transition"; btn.innerText = btn.innerText.replace(" ON",""); } }
-        function toggleDisabled(id, disable) { document.getElementById(id).disabled = disable; }
-        async function toggleRelay(n) { const map = {'reefer':'btnReefer', 'compresor':'btnComp', 'evaporador':'btnEvap', 'condensador':'btnCond', 'resistencia':'btnHeat'}; const btn = document.getElementById(map[n]); await fetch('/admin/control_relay', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify({ device_id: currentDevice, relay_name: n, state: !btn.classList.contains('bg-green-600') }) }); setTimeout(cargarDatosDashboard, 1000); }
+        const mapeoRelays = [
+            { idBtn: 'btnReefer', configName: 'relay_reefer', realName: 'real_reefer', nombre: 'REEFER MASTER' },
+            { idBtn: 'btnComp', configName: 'relay_compresor', realName: 'real_comp', nombre: 'Compresor' },
+            { idBtn: 'btnEvap', configName: 'relay_evaporador', realName: 'real_evap', nombre: 'Evaporador' },
+            { idBtn: 'btnCond', configName: 'relay_condensador', realName: 'real_cond', nombre: 'Condensador' },
+            { idBtn: 'btnHeat', configName: 'relay_resistencia', realName: 'real_heat', nombre: 'Resistencia' }
+        ];
 
+        function actualizarBotonesUI(lectura, config) {
+            if (!lectura || !config) return;
+
+            // Logica de Bloqueo General: Le preguntamos al hardware si el Reefer Master está ON
+            const reeferOn = (lectura.real_reefer === 1);
+
+            mapeoRelays.forEach(relay => {
+                let btn = document.getElementById(relay.idBtn);
+                if (!btn) return;
+
+                let estadoDeseado = config[relay.configName];
+                let estadoReal = lectura[relay.realName];
+
+                // --- NUEVO FIX: Jerarquía de Estados ---
+                
+                // 1. LEY ABSOLUTA: Si el Reefer está prendido, los motores manuales se ESCLAVIZAN
+                if (reeferOn && relay.idBtn !== 'btnReefer') {
+                    btn.innerHTML = `${relay.nombre}`;
+                    btn.className = "w-full p-4 rounded font-bold text-gray-500 bg-gray-200 cursor-not-allowed opacity-70 border border-gray-300";
+                    btn.disabled = true;
+                    return; // 🛑 Cortamos la ejecución acá. Ignora el "Enviando..."
+                }
+
+                // 2. ESTADO: DESINCRONIZADO (Esperando que el ESP32 haga caso)
+                if (estadoDeseado !== estadoReal) {
+                    btn.innerHTML = `<span class="flex items-center justify-center gap-2">
+                                        <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                        Enviando...
+                                     </span>`;
+                    btn.className = "w-full p-4 rounded font-bold bg-yellow-500 text-white cursor-wait opacity-90 transition-all shadow";
+                    btn.disabled = true; 
+                    return; 
+                }
+
+                // 3. ESTADO: SINCRONIZADO (El botón está libre y la DB coincide con la realidad)
+                if (estadoReal === 1) {
+                    btn.innerHTML = `${relay.nombre} <span class="text-xs bg-white text-green-600 px-2 py-1 rounded ml-2">ON</span>`;
+                    btn.className = "w-full p-4 rounded font-bold bg-green-600 hover:bg-green-500 text-white transition-all shadow-lg scale-105";
+                    btn.disabled = false;
+                } else {
+                    btn.innerHTML = `${relay.nombre}`;
+                    btn.className = "w-full p-4 rounded font-bold bg-gray-600 hover:bg-gray-500 text-white transition-all shadow";
+                    btn.disabled = false;
+                }
+            });
+        }
+
+        async function toggleRelay(n) { 
+            const mapID = {'reefer':'btnReefer', 'compresor':'btnComp', 'evaporador':'btnEvap', 'condensador':'btnCond', 'resistencia':'btnHeat'}; 
+            const btn = document.getElementById(mapID[n]); 
+            
+            // Para saber si lo queremos prender o apagar, miramos si actualmente está verde (prendido)
+            const estadoDeseado = !btn.classList.contains('bg-green-600');
+            
+            // Ponemos el botón en amarillo INMEDIATAMENTE al hacer clic para mejor sensación visual
+            btn.innerHTML = `<span class="flex items-center justify-center gap-2"><svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Enviando...</span>`;
+            btn.className = "w-full p-4 rounded font-bold bg-yellow-500 text-white cursor-wait opacity-90 transition-all shadow";
+            
+            await fetch('/admin/control_relay', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, 
+                body: JSON.stringify({ device_id: currentDevice, relay_name: n, state: estadoDeseado }) 
+            }); 
+            
+            // Forzamos una recarga de datos rápida para ver el cambio
+            setTimeout(cargarDatosDashboard, 500); 
+        }
         async function forzarResetWifi() {
             if(!confirm("⚠️ ¿ATENCIÓN?\nEsto borrará la contraseña WiFi del equipo. Quedará OFFLINE hasta reconfigurarlo. ¿Proceder?")) return;
             const res = await fetch('/admin/reset_wifi', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify({ device_id: currentDevice }) });
@@ -345,16 +496,125 @@
         }
 
         async function cargarUsuarios() { 
-            const res = await fetch('/admin/users_list', { headers: { 'Authorization': 'Bearer ' + token } }); const users = await res.json(); const tbody = document.getElementById('usersTableBody'); tbody.innerHTML = ''; 
-            users.forEach(u => { 
-                let rolText = u.role === 'super_admin' ? '<span class="text-purple-600 font-bold">Admin</span>' : (u.role === 'admin' ? '<span class="text-blue-600 font-bold">Admin</span>' : 'Cliente');
-                let btnDel = isSuperAdmin ? `<button onclick="borrarUsuario(${u.id})" class="text-red-500 hover:text-red-700 font-bold ml-2">🗑️</button>` : ''; 
-                tbody.innerHTML += `<tr class="border-b hover:bg-gray-50"><td class="p-2 font-bold">${u.username}</td><td class="p-2 text-xs">${rolText}</td><td class="p-2 flex items-center"><button onclick="resetPass(${u.id}, '${u.username}')" class="text-orange-500 text-xs hover:underline">Clave</button>${btnDel}</td></tr>`; 
-            }); 
+            const res = await fetch('/admin/users_list', { headers: { 'Authorization': 'Bearer ' + token } }); 
+            allUsers = await res.json(); 
+            allUsers.reverse(); // Invertimos para que los últimos creados salgan primero
+            currentPageUsers = 1;
+            renderUsuarios(); 
         }
 
+        function renderUsuarios() {
+            const searchTerm = document.getElementById('searchUsers').value.toLowerCase();
+            let filtered = allUsers.filter(u => u.username.toLowerCase().includes(searchTerm) || u.role.toLowerCase().includes(searchTerm));
+
+            const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
+            if (currentPageUsers > totalPages) currentPageUsers = totalPages;
+
+            const start = (currentPageUsers - 1) * itemsPerPage;
+            const paginated = filtered.slice(start, start + itemsPerPage);
+
+            const tbody = document.getElementById('usersTableBody'); 
+            tbody.innerHTML = ''; 
+            
+            if (paginated.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-gray-500">No se encontraron usuarios</td></tr>`;
+            } else {
+                paginated.forEach(u => { 
+                    let rolText = u.role === 'super_admin' ? '<span class="text-purple-600 font-bold">Admin</span>' : (u.role === 'admin' ? '<span class="text-blue-600 font-bold">Admin</span>' : 'Cliente');
+                    let btnDel = isSuperAdmin ? `<button onclick="borrarUsuario(${u.id})" class="text-red-500 hover:text-red-700 font-bold ml-2" title="Eliminar">🗑️</button>` : ''; 
+                    tbody.innerHTML += `<tr class="border-b hover:bg-gray-50"><td class="p-2 font-bold">${u.username}</td><td class="p-2 text-xs">${rolText}</td><td class="p-2 flex items-center"><button onclick="resetPass(${u.id}, '${u.username}')" class="text-orange-500 text-xs hover:underline border border-orange-500 rounded px-1">Clave</button>${btnDel}</td></tr>`; 
+                });
+            }
+
+            document.getElementById('paginationUsers').innerHTML = `
+                <span>Página ${currentPageUsers} de ${totalPages} <span class="text-xs text-gray-400 font-normal">(${filtered.length} total)</span></span>
+                <div class="flex gap-2">
+                    <button onclick="changePageUsers(-1)" class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed" ${currentPageUsers === 1 ? 'disabled' : ''}>◀</button>
+                    <button onclick="changePageUsers(1)" class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed" ${currentPageUsers === totalPages ? 'disabled' : ''}>▶</button>
+                </div>
+            `;
+        }
+        function changePageUsers(dir) { currentPageUsers += dir; renderUsuarios(); }
+
+
+        // --- LÓGICA DE ASIGNACIONES ---
+        async function cargarAsignaciones() { 
+            const res = await fetch('/admin/assignments', { headers: { 'Authorization': 'Bearer ' + token } }); 
+            allAssignments = await res.json(); 
+            allAssignments.reverse(); // Los últimos asignados primero
+            currentPageAssignments = 1;
+            renderAsignaciones(); 
+        }
+
+        function renderAsignaciones() {
+            const searchTerm = document.getElementById('searchAssignments').value.toLowerCase();
+            let filtered = allAssignments.filter(a => a.username.toLowerCase().includes(searchTerm) || a.device_id.toLowerCase().includes(searchTerm));
+
+            const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
+            if (currentPageAssignments > totalPages) currentPageAssignments = totalPages;
+
+            const start = (currentPageAssignments - 1) * itemsPerPage;
+            const paginated = filtered.slice(start, start + itemsPerPage);
+
+            const tbody = document.getElementById('assignmentsTable'); 
+            tbody.innerHTML = ''; 
+
+            if (paginated.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">No se encontraron asignaciones</td></tr>`;
+            } else {
+                paginated.forEach(item => { 
+                    const st = item.is_active ? ['text-green-600 bg-green-100','ACTIVO','⏸️'] : ['text-red-600 bg-red-100','PAUSA','▶️']; 
+                    tbody.innerHTML += `<tr class="border-b hover:bg-gray-50"><td class="p-2 font-bold">${item.username}</td><td class="p-2 font-mono text-xs text-blue-600">${item.device_id}</td><td class="p-2"><span class="text-xs px-2 py-1 rounded ${st[0]}">${st[1]}</span></td><td class="p-2"><button onclick="toggleAsig(${item.id})" class="mr-2 hover:bg-gray-200 rounded px-1" title="Pausar/Reanudar">${st[2]}</button><button onclick="delAsig(${item.id})" class="text-red-500 hover:text-red-700 font-bold" title="Quitar Asignación">🗑️</button></td></tr>`; 
+                });
+            }
+
+            document.getElementById('paginationAssignments').innerHTML = `
+                <span>Página ${currentPageAssignments} de ${totalPages} <span class="text-xs text-gray-400 font-normal">(${filtered.length} total)</span></span>
+                <div class="flex gap-2">
+                    <button onclick="changePageAssignments(-1)" class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed" ${currentPageAssignments === 1 ? 'disabled' : ''}>◀</button>
+                    <button onclick="changePageAssignments(1)" class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed" ${currentPageAssignments === totalPages ? 'disabled' : ''}>▶</button>
+                </div>
+            `;
+        }
+        function changePageAssignments(dir) { currentPageAssignments += dir; renderAsignaciones(); }
+
         async function cargarAsignaciones() { const res = await fetch('/admin/assignments', { headers: { 'Authorization': 'Bearer ' + token } }); const data = await res.json(); const tbody = document.getElementById('assignmentsTable'); tbody.innerHTML = ''; data.forEach(item => { const st = item.is_active ? ['text-green-600 bg-green-100','ACTIVO','⏸️'] : ['text-red-600 bg-red-100','PAUSA','▶️']; tbody.innerHTML += `<tr class="border-b hover:bg-gray-50"><td class="p-2">${item.username}</td><td class="p-2 font-mono text-xs">${item.device_id}</td><td class="p-2"><span class="text-xs px-2 rounded ${st[0]}">${st[1]}</span></td><td class="p-2"><button onclick="toggleAsig(${item.id})" class="mr-2 hover:bg-gray-200 rounded px-1">${st[2]}</button><button onclick="delAsig(${item.id})" class="text-red-500 hover:text-red-700 font-bold">🗑️</button></td></tr>`; }); }
-        async function crearUsuario() { await fetch('/admin/users', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({username:document.getElementById('new_user').value, password:document.getElementById('new_pass').value, role:document.getElementById('new_role').value}) }); cargarUsuarios(); }
+        async function crearUsuario() { 
+            const inputUser = document.getElementById('new_user');
+            const inputPass = document.getElementById('new_pass');
+            const inputRole = document.getElementById('new_role');
+
+            if (!inputUser.value || !inputPass.value) {
+                alert("⚠️ Por favor, completá el nombre de usuario y la contraseña.");
+                return;
+            }
+
+            const res = await fetch('/admin/users', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, 
+                body: JSON.stringify({
+                    username: inputUser.value, 
+                    password: inputPass.value, 
+                    role: inputRole.value
+                }) 
+            }); 
+            
+            if (res.ok) {
+                alert(`✅ Usuario '${inputUser.value}' creado exitosamente.`);
+                
+                // Limpiamos los casilleros para que queden en blanco
+                inputUser.value = '';
+                inputPass.value = '';
+                inputRole.value = 'cliente';
+                
+                // Recargamos la tabla para que aparezca el nuevo usuario arriba de todo
+                cargarUsuarios(); 
+            } else {
+                // Si el servidor tiró error (ej. el usuario ya existe), lo mostramos
+                const errorData = await res.json();
+                alert(errorData.detail || "❌ Ocurrió un error al crear el usuario.");
+            }
+        }
         async function asignarEquipo() { await fetch('/admin/assign', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({username:document.getElementById('assign_user').value, device_id:document.getElementById('assign_device').value}) }); cargarAsignaciones(); }
         async function borrarUsuario(id) { if(confirm("¿Eliminar usuario?")) { await fetch('/admin/delete_user', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({user_id:id}) }); cargarUsuarios(); } }
         async function resetPass(id, name) { const p = prompt("Nueva clave para "+name); if(p) { await fetch('/admin/reset_password', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({user_id:id, new_password:p}) }); } }

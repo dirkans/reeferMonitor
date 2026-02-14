@@ -70,6 +70,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         if username is None: raise HTTPException(status_code=401)
     except JWTError: raise HTTPException(status_code=401)
     return {"username": username, "role": role}
+
 @app.get("/", response_class=HTMLResponse)
 async def ver_index(): return FileResponse("index.html")
 @app.get("/login", response_class=HTMLResponse)
@@ -158,7 +159,6 @@ async def motor_de_alarmas():
                                             vapid_private_key=VAPID_PRIVATE_KEY,
                                             vapid_claims=VAPID_CLAIMS
                                         )
-                                    # ---> LA MEJORA PRO: LIMPIEZA AUTOMÁTICA DE 410 GONE <---
                                     except WebPushException as ex:
                                         print(f"Error enviando push a {username}: {ex}")
                                         if ex.response is not None and ex.response.status_code == 410:
@@ -181,7 +181,6 @@ async def motor_de_alarmas():
         except Exception as e:
             print("Error en el Motor de Alarmas:", e)
         finally:
-            # ---> LA MEJORA PRO: CIERRE SEGURO DE LA DB <---
             if 'conn' in locals() and conn.is_connected():
                 conn.close()
                 
@@ -197,7 +196,6 @@ async def login(form: OAuth2PasswordRequestForm = Depends()):
     cursor.execute("SELECT * FROM users WHERE username = %s", (form.username,))
     user = cursor.fetchone(); conn.close()
     if not user or not verify_pass(form.password, user['password_hash']): raise HTTPException(status_code=401)
-    # Incluimos el ROL en el token
     return {"access_token": create_token({"sub": user['username'], "role": user['role']}), "token_type": "bearer"}
 
 @app.post("/api/datos")
@@ -218,8 +216,6 @@ async def recibir_datos_iot(d: LecturaCompleta):
     
     return {"status": "ok", "reset_wifi": int(config.get('reset_wifi', 0)), "relays": {"comp": int(config['relay_compresor']), "evap": int(config['relay_evaporador']), "cond": int(config['relay_condensador']), "heat": int(config['relay_resistencia']), "reefer": int(config['relay_reefer'])}}
 
-# --- ENDPOINTS PROTEGIDOS POR ROLES ---
-
 @app.post("/admin/reset_wifi")
 async def reset_wifi_device(cmd: WifiCommand, current_user: dict = Depends(get_current_user)):
     if current_user['role'] != 'super_admin': raise HTTPException(status_code=403, detail="Solo Super Admin")
@@ -238,12 +234,38 @@ async def delete_device(cmd: DeviceDelete, current_user: dict = Depends(get_curr
     except Exception as e: conn.close(); raise HTTPException(status_code=400, detail=str(e))
     conn.close(); return {"msg": "Equipo eliminado correctamente"}
 
+# ==========================================================
+# EL PARCHE DEFINITIVO PARA EL REEFER MASTER ESTÁ AQUÍ ⬇️
+# ==========================================================
 @app.post("/admin/control_relay")
 async def control_relay(cmd: RelayCommand, current_user: dict = Depends(get_current_user)):
-    if current_user['role'] not in ['super_admin', 'admin']: raise HTTPException(status_code=403, detail="Permiso Denegado")
-    conn = get_db(); cursor = conn.cursor(dictionary=True)
-    cursor.execute(f"UPDATE device_config SET relay_{cmd.relay_name} = %s WHERE device_id = %s", (cmd.state, cmd.device_id)); conn.commit(); conn.close()
+    if current_user['role'] not in ['super_admin', 'admin']: 
+        raise HTTPException(status_code=403, detail="Permiso Denegado")
+        
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    
+    try:
+        # 1. Actualizamos el relay específico que el usuario tocó
+        cursor.execute(f"UPDATE device_config SET relay_{cmd.relay_name} = %s WHERE device_id = %s", (cmd.state, cmd.device_id))
+        
+        # 2. Si se apagó el botón del Reefer, blanqueamos los relés manuales a CERO
+        if cmd.relay_name == "reefer":
+            cursor.execute("""
+                UPDATE device_config 
+                SET relay_compresor = 0, relay_evaporador = 0, relay_condensador = 0, relay_resistencia = 0 
+                WHERE device_id = %s
+            """, (cmd.device_id,))
+            print(f"🧹 MODO MANUAL ACTIVADO: Memoria de relés borrada para {cmd.device_id}")
+            
+        conn.commit()
+    except Exception as e:
+        print(f"Error en control_relay: {e}")
+    finally:
+        conn.close()
+        
     return {"msg": "Comando enviado"}
+# ==========================================================
 
 @app.get("/api/estado_actual/{device_id}")
 async def get_estado(device_id: str, current_user: dict = Depends(get_current_user)):
@@ -304,11 +326,31 @@ async def delete_assignment(action: AssignmentAction, current_user: dict = Depen
 
 @app.post("/admin/users")
 async def create_user(new_user: UserCreate, current_user: dict = Depends(get_current_user)): 
-    if current_user['role'] not in ['super_admin', 'admin']: raise HTTPException(status_code=403)
-    conn = get_db(); cursor = conn.cursor()
-    # Por seguridad, si Ivan crea un usuario, forzamos a que sea 'cliente'
-    if current_user['role'] == 'admin' and new_user.role == 'super_admin': raise HTTPException(status_code=403, detail="No podes crear Super Admins")
-    cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)", (new_user.username, get_hash(new_user.password), new_user.role)); conn.commit(); conn.close(); return {"msg": "Usuario creado"}
+    if current_user['role'] not in ['super_admin', 'admin']: 
+        raise HTTPException(status_code=403)
+        
+    if current_user['role'] == 'admin' and new_user.role == 'super_admin': 
+        raise HTTPException(status_code=403, detail="No podés crear Super Admins")
+        
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # 1. Verificamos si el usuario ya existe antes de hacer nada
+    cursor.execute("SELECT id FROM users WHERE username = %s", (new_user.username,))
+    if cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=400, detail="⚠️ El usuario ya existe en la base de datos.")
+        
+    try:
+        # 2. Si no existe, lo creamos
+        cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)", (new_user.username, get_hash(new_user.password), new_user.role))
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    conn.close()
+    return {"msg": "Usuario creado exitosamente"}
 
 @app.post("/admin/assign")
 async def assign_device(assignment: DeviceAssign, current_user: dict = Depends(get_current_user)): 
@@ -341,12 +383,12 @@ async def test_push(current_user: dict = Depends(get_current_user)):
         except WebPushException as ex:
             print("Error enviando push:", repr(ex))
     return {"msg": "Enviado"}
+
 @app.post("/api/save_settings")
 async def save_settings(settings: DeviceSettings, current_user: dict = Depends(get_current_user)):
     conn = get_db()
     cursor = conn.cursor()
     
-    # Si es cliente, verificamos que el equipo sea suyo
     if current_user['role'] == 'cliente':
         cursor.execute("SELECT id FROM user_devices JOIN users ON user_devices.user_id = users.id WHERE users.username = %s AND user_devices.device_id = %s", (current_user['username'], settings.device_id))
         if not cursor.fetchone():
