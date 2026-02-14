@@ -105,7 +105,7 @@ async def motor_de_alarmas():
                 tolerancia = eq['tolerancia_temp']
                 t_caliente = eq['tiempo_caliente']
                 
-                cursor.execute("SELECT val_return, created_at FROM device_data WHERE device_id = %s ORDER BY created_at DESC LIMIT 1", (dev_id,))
+                cursor.execute("SELECT temperatura, fecha FROM lecturas WHERE device_id = %s ORDER BY fecha DESC LIMIT 1", (dev_id,))
                 last_data = cursor.fetchone()
                 
                 if not last_data:
@@ -113,14 +113,14 @@ async def motor_de_alarmas():
                     
                 limite_maximo = setpoint + tolerancia
                 
-                if last_data['val_return'] > limite_maximo:
+                if last_data['temperatura'] > limite_maximo:
                     
                     query_historico = """
                         SELECT COUNT(*) as buenas 
-                        FROM device_data 
+                        FROM lecturas 
                         WHERE device_id = %s 
-                        AND val_return <= %s 
-                        AND created_at >= NOW() - INTERVAL %s MINUTE
+                        AND temperatura <= %s 
+                        AND fecha >= NOW() - INTERVAL %s MINUTE
                     """
                     cursor.execute(query_historico, (dev_id, limite_maximo, t_caliente))
                     resultado = cursor.fetchone()
@@ -147,7 +147,7 @@ async def motor_de_alarmas():
                                 
                                 payload = {
                                     "title": f"⚠️ ALERTA: Equipo {dev_id}",
-                                    "body": f"El Return ({last_data['val_return']}°C) superó el límite por más de {t_caliente} minutos."
+                                    "body": f"El Return ({last_data['temperatura']}°C) superó el límite por más de {t_caliente} minutos."
                                 }
                                 
                                 for s in subs:
@@ -158,8 +158,18 @@ async def motor_de_alarmas():
                                             vapid_private_key=VAPID_PRIVATE_KEY,
                                             vapid_claims=VAPID_CLAIMS
                                         )
+                                    # ---> LA MEJORA PRO: LIMPIEZA AUTOMÁTICA DE 410 GONE <---
+                                    except WebPushException as ex:
+                                        print(f"Error enviando push a {username}: {ex}")
+                                        if ex.response is not None and ex.response.status_code == 410:
+                                            conn_del = get_db()
+                                            cur_del = conn_del.cursor()
+                                            cur_del.execute("DELETE FROM push_subscriptions WHERE endpoint = %s", (s['endpoint'],))
+                                            conn_del.commit()
+                                            conn_del.close()
+                                            print(f"🧹 Suscripción expirada de {username} eliminada.")
                                     except Exception as e:
-                                        print(f"Error enviando push a {username}:", e)
+                                        print(f"Error general enviando push a {username}: {e}")
                             
                             registro_alarmas[dev_id] = datetime.now()
                             
@@ -168,10 +178,13 @@ async def motor_de_alarmas():
                         print(f"✅ EQUIPO {dev_id} RECUPERADO. Alarma reseteada.")
                         del registro_alarmas[dev_id]
             
-            conn.close()
         except Exception as e:
             print("Error en el Motor de Alarmas:", e)
-            
+        finally:
+            # ---> LA MEJORA PRO: CIERRE SEGURO DE LA DB <---
+            if 'conn' in locals() and conn.is_connected():
+                conn.close()
+                
         await asyncio.sleep(60)
 
 @app.on_event("startup")

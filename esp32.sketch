@@ -4,6 +4,8 @@
 #include <DallasTemperature.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
+#include <Wire.h>
+#include <Adafruit_ADS1X15.h>
 
 // --- PINES ---
 const int oneWireBus = 4; 
@@ -17,9 +19,9 @@ const int PIN_REEFER = 13;
 
 // --- VARIABLES ---
 char device_id[50] = "alejandra1"; 
-String serverUrl = "http://10.29.92.170:8000/api/datos";
+String serverUrl = "https://reefermonitor.com.ar/api/datos"; // Actualizado a tu dominio seguro
 
-// NUEVO: Temporizador para el Watchdog (Perro Guardián) de WiFi
+// Temporizador para el Watchdog (Perro Guardián) de WiFi
 unsigned long ultimo_wifi_ok = 0; 
 
 // --- OBJETOS ---
@@ -28,6 +30,14 @@ DallasTemperature sensors(&oneWire);
 Preferences preferences; 
 WiFiManager wm;
 WiFiManagerParameter custom_device_id("deviceid", "Nombre del Equipo", device_id, 50);
+
+// NUEVO: Objeto del Amperímetro
+Adafruit_ADS1115 ads;
+
+// Factores de calibración individuales del Amperímetro (Ajustados para carga de 8A)
+float FACTOR_R = 96.44; 
+float FACTOR_S = 97.47; 
+float FACTOR_T = 96.83; 
 
 void setup() {
   Serial.begin(115200);
@@ -50,17 +60,26 @@ void setup() {
   String savedId = preferences.getString("dev_id", "");
   if(savedId != "") savedId.toCharArray(device_id, 50);
   
-  // 3. WiFiManager (Con Timeout Anti-Bloqueo)
+  // NUEVO: 3. Iniciar ADS1115 (Amperímetro)
+  Wire.begin(21, 22); // Pines I2C (SDA, SCL)
+  if (!ads.begin()) {
+    Serial.println("❌ No se encontró el ADS1115. Revisar cables I2C.");
+    // No bloqueamos con while(1) para que el ESP32 no muera si se desconecta el sensor
+  } else {
+    ads.setGain(GAIN_ONE); // Rango de lectura +/- 4.096V
+    ads.setDataRate(RATE_ADS1115_860SPS); // Máxima velocidad de muestreo
+    Serial.println("✅ Amperímetro ADS1115 Iniciado.");
+  }
+
+  // 4. WiFiManager (Con Timeout Anti-Bloqueo)
   wm.addParameter(&custom_device_id);
-  
-  // NUEVO: Si levanta el Hotspot, espera máximo 3 minutos (180 segs). Si nadie entra, sigue de largo.
   wm.setConfigPortalTimeout(180); 
   
   bool res = wm.autoConnect("Reefer_Setup", "password123"); 
 
   if(!res) {
     Serial.println("Timeout del Hotspot o no hay WiFi disponible. Reiniciando...");
-    ESP.restart(); // Se reinicia para no quedarse trabado
+    ESP.restart(); 
   }
   
   // Guardar nuevo ID si el usuario lo cambió en el portal
@@ -72,45 +91,63 @@ void setup() {
   preferences.end();
 
   Serial.println("Conectado! Soy: " + String(device_id));
-  
-  // Iniciamos el temporizador indicando que ahora mismo SÍ hay WiFi
   ultimo_wifi_ok = millis();
   
   sensors.begin();
 }
 
+// NUEVO: Función para leer Amperes Reales
+float obtenerAmperajeRMS(int canalADS, float factor_calibracion) {
+  int16_t adc_max = -32768; 
+  int16_t adc_min = 32767;  
+  unsigned long start_time = millis();
+  
+  while((millis() - start_time) < 100) {
+    int16_t lectura = ads.readADC_SingleEnded(canalADS);
+    if (lectura > adc_max) adc_max = lectura;
+    if (lectura < adc_min) adc_min = lectura;
+  }
+  
+  float voltaje_pico_a_pico = ((adc_max - adc_min) * 0.125) / 1000.0; 
+  float voltaje_rms = (voltaje_pico_a_pico / 2.0) * 0.7071;
+  float amperaje_rms = voltaje_rms * factor_calibracion;
+  
+  // Filtro de ruido (Ignora lecturas menores a 50mA)
+  if (amperaje_rms < 0.05) return 0.0;
+  
+  return amperaje_rms;
+}
+
 void loop() {
   if(WiFi.status() == WL_CONNECTED) {
     
-    // Si entró acá, es porque hay internet. Actualizamos el reloj del Perro Guardián.
     ultimo_wifi_ok = millis(); 
 
     HTTPClient http;
     http.begin(serverUrl);
     http.addHeader("Content-Type", "application/json");
 
-    // --- SENSORES ---
+    // --- SENSORES TEMPERATURA ---
     sensors.requestTemperatures();
     float tempReturn = sensors.getTempCByIndex(0);
-    if(tempReturn == -127) tempReturn = 20.0; 
-
-    // Simulacion Temperaturas
-    float tempSupply = tempReturn - 8.0;
-    float tempEvap = (tempReturn + tempSupply) / 2.0;
+    float tempSupply = sensors.getTempCByIndex(1);
+    float tempEvap = sensors.getTempCByIndex(2);
     
-    // --- SIMULACION CORRIENTES TRIFASICAS ---
-    float ampR = 15.0; 
-    float ampS = 14.5; 
-    float ampT = 15.2;
+    // Si no detecta el sensor físico, filtramos el -127
+    if(tempReturn == DEVICE_DISCONNECTED_C) tempReturn = 0.0;
+    if(tempSupply == DEVICE_DISCONNECTED_C) tempSupply = 0.0;
+    if(tempEvap == DEVICE_DISCONNECTED_C) tempEvap = 0.0;
 
-    // --- LEER ESTADO REAL (FEEDBACK) ---
-    // Motores: !digitalRead (invierte, si lee LOW guarda 1)
+    // --- SENSORES CORRIENTE (LECTURA REAL) ---
+    float ampR = obtenerAmperajeRMS(0, FACTOR_R); 
+    float ampS = obtenerAmperajeRMS(1, FACTOR_S); 
+    float ampT = obtenerAmperajeRMS(2, FACTOR_T);
+
+    // --- LEER ESTADO REAL (FEEDBACK RELAYS) ---
     int stComp = !digitalRead(PIN_COMP);
     int stEvap = !digitalRead(PIN_EVAP);
     int stCond = !digitalRead(PIN_COND);
     int stHeat = !digitalRead(PIN_HEAT);
-    
-    // Reefer: Lectura directa. Si está HIGH (Bobina OFF, NC Cerrado), significa 1 (ON)
     int stReefer = digitalRead(PIN_REEFER);
 
     // --- ARMAR JSON ---
@@ -135,6 +172,8 @@ void loop() {
     String jsonStr;
     serializeJson(doc, jsonStr);
 
+    Serial.println("Enviando: " + jsonStr);
+
     int code = http.POST(jsonStr);
 
     if(code == 200) {
@@ -143,14 +182,13 @@ void loop() {
       deserializeJson(docRes, body);
 
       // --- 1. MANTENIMIENTO REMOTO (RESET WIFI) ---
-      // Verificamos si el servidor nos mandó la orden de borrar el WiFi
       if(docRes.containsKey("reset_wifi")) {
         int doReset = docRes["reset_wifi"];
         if(doReset == 1) {
           Serial.println("📡 ORDEN RECIBIDA: ¡Borrando WiFi y reiniciando!");
-          wm.resetSettings();  // Borra la clave de WiFi
+          wm.resetSettings(); 
           delay(1000);
-          ESP.restart();       // Se reinicia. Levantará el Hotspot automáticamente.
+          ESP.restart();       
         }
       }
       
@@ -163,9 +201,8 @@ void loop() {
 
       if(rReefer == 1) {
         // --- MODO AUTOMÁTICO ---
-        digitalWrite(PIN_REEFER, HIGH); // Bobina Desenergizada (NC Cerrado)
+        digitalWrite(PIN_REEFER, HIGH); 
         
-        // BLOQUEO cruzado: Forzamos el apagado de los motores manuales
         digitalWrite(PIN_COMP, HIGH);
         digitalWrite(PIN_EVAP, HIGH);
         digitalWrite(PIN_COND, HIGH);
@@ -173,25 +210,24 @@ void loop() {
 
       } else {
         // --- MODO MANUAL ---
-        digitalWrite(PIN_REEFER, LOW); // Bobina Energizada (NC Abierto -> Corta controlador original)
+        digitalWrite(PIN_REEFER, LOW); 
         
-        // LIBERACIÓN: Obedecemos a los botones manuales (1 = LOW/Tomado, 0 = HIGH/Suelto)
         digitalWrite(PIN_COMP, rComp ? LOW : HIGH);
         digitalWrite(PIN_EVAP, rEvap ? LOW : HIGH);
         digitalWrite(PIN_COND, rCond ? LOW : HIGH);
         digitalWrite(PIN_HEAT, rHeat ? LOW : HIGH);
       }
+    } else {
+       Serial.println("Error HTTP: " + String(code));
     }
     http.end();
   } else {
     // --- WATCHDOG (PERRO GUARDIÁN) DE WIFI ---
-    // Si no hay WiFi, revisamos hace cuánto perdimos la conexión.
-    // 300000 milisegundos = 5 minutos.
     if(millis() - ultimo_wifi_ok > 300000) {
       Serial.println("⚠️ 5 minutos sin internet. Reiniciando ESP32 por seguridad...");
       ESP.restart();
     }
   }
   
-  delay(5000); 
+  delay(10000); // 10 segundos para pruebas. Subir en producción.
 }
