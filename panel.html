@@ -102,6 +102,12 @@
                     <button id="btnCond" onclick="toggleRelay('condensador')" class="p-4 rounded font-bold text-white bg-gray-400 transition">Condensador</button>
                     <button id="btnHeat" onclick="toggleRelay('resistencia')" class="p-4 rounded font-bold text-white bg-gray-400 transition">Resistencias</button>
                 </div>
+                <div class="mt-6 pt-4 border-t border-gray-200">
+                    <p class="text-xs font-bold text-gray-500 mb-2 uppercase">Mantenimiento Remoto</p>
+                    <button onclick="forzarResetWifi()" class="w-full p-3 rounded font-bold text-white bg-orange-500 hover:bg-orange-600 transition shadow flex justify-center items-center gap-2">
+                        📡 Forzar Reset WiFi (Levantar Hotspot)
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -376,6 +382,20 @@
                 await fetch('/admin/delete_assignment', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer '+token}, body: JSON.stringify({assignment_id:id}) }); 
                 cargarAsignaciones(); 
             } 
+        }
+
+        // --- FUNCIÓN NUEVA: FORZAR RESET WIFI ---
+        async function forzarResetWifi() {
+            if(!confirm("⚠️ ¿ATENCIÓN?\n\nEsto borrará la contraseña WiFi del equipo. El equipo se reiniciará inmediatamente y levantará el portal 'Reefer_Setup'.\n\nQuedará OFFLINE hasta que el cliente vuelva a configurarlo con su celular.\n\n¿Proceder?")) return;
+            
+            const res = await fetch('/admin/reset_wifi', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, 
+                body: JSON.stringify({ device_id: currentDevice }) 
+            });
+            
+            if(res.ok) alert("Comando enviado al equipo.\nSe reiniciará en el próximo pulso (5s).");
+            else alert("Error al enviar el comando.");
         }
 
         function logout() { 

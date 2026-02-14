@@ -15,11 +15,14 @@ const int PIN_HEAT = 12;
 // RELAY MASTER (Fail-Safe: Usamos el contacto NC)
 const int PIN_REEFER = 13;
 
-// Variables
+// --- VARIABLES ---
 char device_id[50] = "alejandra1"; 
 String serverUrl = "http://10.29.92.170:8000/api/datos";
 
-// Objetos
+// NUEVO: Temporizador para el Watchdog (Perro Guardián) de WiFi
+unsigned long ultimo_wifi_ok = 0; 
+
+// --- OBJETOS ---
 OneWire oneWire(oneWireBus);
 DallasTemperature sensors(&oneWire);
 Preferences preferences; 
@@ -42,17 +45,25 @@ void setup() {
   // HIGH = Bobina Desenergizada = Contacto NC Cerrado = REEFER ENCENDIDO (Automático)
   digitalWrite(PIN_REEFER, HIGH);
 
-  // 2. Cargar nombre
+  // 2. Cargar nombre desde la memoria
   preferences.begin("reefer_config", false);
   String savedId = preferences.getString("dev_id", "");
   if(savedId != "") savedId.toCharArray(device_id, 50);
   
-  // 3. WiFiManager
+  // 3. WiFiManager (Con Timeout Anti-Bloqueo)
   wm.addParameter(&custom_device_id);
+  
+  // NUEVO: Si levanta el Hotspot, espera máximo 3 minutos (180 segs). Si nadie entra, sigue de largo.
+  wm.setConfigPortalTimeout(180); 
+  
   bool res = wm.autoConnect("Reefer_Setup", "password123"); 
 
-  if(!res) ESP.restart();
+  if(!res) {
+    Serial.println("Timeout del Hotspot o no hay WiFi disponible. Reiniciando...");
+    ESP.restart(); // Se reinicia para no quedarse trabado
+  }
   
+  // Guardar nuevo ID si el usuario lo cambió en el portal
   String newId = custom_device_id.getValue();
   if(newId != device_id && newId.length() > 0) {
       preferences.putString("dev_id", newId);
@@ -61,11 +72,19 @@ void setup() {
   preferences.end();
 
   Serial.println("Conectado! Soy: " + String(device_id));
+  
+  // Iniciamos el temporizador indicando que ahora mismo SÍ hay WiFi
+  ultimo_wifi_ok = millis();
+  
   sensors.begin();
 }
 
 void loop() {
   if(WiFi.status() == WL_CONNECTED) {
+    
+    // Si entró acá, es porque hay internet. Actualizamos el reloj del Perro Guardián.
+    ultimo_wifi_ok = millis(); 
+
     HTTPClient http;
     http.begin(serverUrl);
     http.addHeader("Content-Type", "application/json");
@@ -94,7 +113,7 @@ void loop() {
     // Reefer: Lectura directa. Si está HIGH (Bobina OFF, NC Cerrado), significa 1 (ON)
     int stReefer = digitalRead(PIN_REEFER);
 
-    // --- JSON ---
+    // --- ARMAR JSON ---
     StaticJsonDocument<768> doc;
     doc["device_id"] = device_id;
     doc["temp_return"] = tempReturn;
@@ -122,21 +141,31 @@ void loop() {
       String body = http.getString();
       StaticJsonDocument<768> docRes;
       deserializeJson(docRes, body);
+
+      // --- 1. MANTENIMIENTO REMOTO (RESET WIFI) ---
+      // Verificamos si el servidor nos mandó la orden de borrar el WiFi
+      if(docRes.containsKey("reset_wifi")) {
+        int doReset = docRes["reset_wifi"];
+        if(doReset == 1) {
+          Serial.println("📡 ORDEN RECIBIDA: ¡Borrando WiFi y reiniciando!");
+          wm.resetSettings();  // Borra la clave de WiFi
+          delay(1000);
+          ESP.restart();       // Se reinicia. Levantará el Hotspot automáticamente.
+        }
+      }
       
+      // --- 2. CONTROL DE RELAYS ---
       int rComp = docRes["relays"]["comp"];
       int rEvap = docRes["relays"]["evap"];
       int rCond = docRes["relays"]["cond"];
       int rHeat = docRes["relays"]["heat"];
       int rReefer = docRes["relays"]["reefer"];
 
-      // --- ACTUAR (CONTROL FAIL-SAFE REEFER + MOTORES) ---
-      
       if(rReefer == 1) {
         // --- MODO AUTOMÁTICO ---
-        // Servidor pide ON. Queremos el equipo funcionando normal (NC cerrado).
-        digitalWrite(PIN_REEFER, HIGH); // Bobina Desenergizada
+        digitalWrite(PIN_REEFER, HIGH); // Bobina Desenergizada (NC Cerrado)
         
-        // BLOQUEO: Forzamos el apagado de los motores manuales para no pelear con el controlador original
+        // BLOQUEO cruzado: Forzamos el apagado de los motores manuales
         digitalWrite(PIN_COMP, HIGH);
         digitalWrite(PIN_EVAP, HIGH);
         digitalWrite(PIN_COND, HIGH);
@@ -144,11 +173,9 @@ void loop() {
 
       } else {
         // --- MODO MANUAL ---
-        // Servidor pide OFF. Queremos apagar el controlador original (NC abierto).
-        digitalWrite(PIN_REEFER, LOW); // Bobina Energizada (Tomada)
+        digitalWrite(PIN_REEFER, LOW); // Bobina Energizada (NC Abierto -> Corta controlador original)
         
-        // LIBERACIÓN: Ahora sí obedecemos a los botones manuales
-        // (Para los motores: 1 = LOW/Tomado, 0 = HIGH/Suelto)
+        // LIBERACIÓN: Obedecemos a los botones manuales (1 = LOW/Tomado, 0 = HIGH/Suelto)
         digitalWrite(PIN_COMP, rComp ? LOW : HIGH);
         digitalWrite(PIN_EVAP, rEvap ? LOW : HIGH);
         digitalWrite(PIN_COND, rCond ? LOW : HIGH);
@@ -156,6 +183,15 @@ void loop() {
       }
     }
     http.end();
+  } else {
+    // --- WATCHDOG (PERRO GUARDIÁN) DE WIFI ---
+    // Si no hay WiFi, revisamos hace cuánto perdimos la conexión.
+    // 300000 milisegundos = 5 minutos.
+    if(millis() - ultimo_wifi_ok > 300000) {
+      Serial.println("⚠️ 5 minutos sin internet. Reiniciando ESP32 por seguridad...");
+      ESP.restart();
+    }
   }
+  
   delay(5000); 
 }
