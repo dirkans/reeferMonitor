@@ -10,6 +10,8 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pywebpush import webpush, WebPushException
 import json
+import asyncio
+from datetime import datetime, timedelta
 
 # PEGA TUS LLAVES DE VAPIDKEYS.COM AQUI:
 VAPID_PUBLIC_KEY = "BFcBoXl5oQ6kCA345y5SzPgCgSrEAnaCDWwim65ajHYh126uj6HwNCxPAIta0urS4rC_i2gODtF1SXVbtOvlcmg"
@@ -85,6 +87,96 @@ async def serve_icon(): return FileResponse("icon.png", media_type="image/png")
 @app.get("/dashboard.png")
 async def serve_dashboard(): return FileResponse("dashboard.png", media_type="image/png")
 
+registro_alarmas = {}
+
+async def motor_de_alarmas():
+    print("🤖 Motor de Alarmas Inteligente: INICIADO")
+    while True:
+        try:
+            conn = get_db()
+            cursor = conn.cursor(dictionary=True)
+            
+            cursor.execute("SELECT device_id, setpoint, tolerancia_temp, tiempo_caliente FROM device_config")
+            equipos = cursor.fetchall()
+            
+            for eq in equipos:
+                dev_id = eq['device_id']
+                setpoint = eq['setpoint']
+                tolerancia = eq['tolerancia_temp']
+                t_caliente = eq['tiempo_caliente']
+                
+                cursor.execute("SELECT val_return, created_at FROM device_data WHERE device_id = %s ORDER BY created_at DESC LIMIT 1", (dev_id,))
+                last_data = cursor.fetchone()
+                
+                if not last_data:
+                    continue 
+                    
+                limite_maximo = setpoint + tolerancia
+                
+                if last_data['val_return'] > limite_maximo:
+                    
+                    query_historico = """
+                        SELECT COUNT(*) as buenas 
+                        FROM device_data 
+                        WHERE device_id = %s 
+                        AND val_return <= %s 
+                        AND created_at >= NOW() - INTERVAL %s MINUTE
+                    """
+                    cursor.execute(query_historico, (dev_id, limite_maximo, t_caliente))
+                    resultado = cursor.fetchone()
+                    
+                    if resultado['buenas'] == 0:
+                        
+                        ultima_vez = registro_alarmas.get(dev_id)
+                        if not ultima_vez or (datetime.now() - ultima_vez) > timedelta(hours=2):
+                            
+                            print(f"⚠️ DISPARANDO ALARMA PUSH PARA: {dev_id}")
+                            
+                            cursor.execute("""
+                                SELECT users.username 
+                                FROM users 
+                                JOIN user_devices ON users.id = user_devices.user_id 
+                                WHERE user_devices.device_id = %s
+                            """, (dev_id,))
+                            dueños = cursor.fetchall()
+                            
+                            for dueño in dueños:
+                                username = dueño['username']
+                                cursor.execute("SELECT * FROM push_subscriptions WHERE username = %s", (username,))
+                                subs = cursor.fetchall()
+                                
+                                payload = {
+                                    "title": f"⚠️ ALERTA: Equipo {dev_id}",
+                                    "body": f"El Return ({last_data['val_return']}°C) superó el límite por más de {t_caliente} minutos."
+                                }
+                                
+                                for s in subs:
+                                    try:
+                                        webpush(
+                                            subscription_info={"endpoint": s['endpoint'], "keys": {"p256dh": s['p256dh'], "auth": s['auth']}},
+                                            data=json.dumps(payload),
+                                            vapid_private_key=VAPID_PRIVATE_KEY,
+                                            vapid_claims=VAPID_CLAIMS
+                                        )
+                                    except Exception as e:
+                                        print(f"Error enviando push a {username}:", e)
+                            
+                            registro_alarmas[dev_id] = datetime.now()
+                            
+                else:
+                    if dev_id in registro_alarmas:
+                        print(f"✅ EQUIPO {dev_id} RECUPERADO. Alarma reseteada.")
+                        del registro_alarmas[dev_id]
+            
+            conn.close()
+        except Exception as e:
+            print("Error en el Motor de Alarmas:", e)
+            
+        await asyncio.sleep(60)
+
+@app.on_event("startup")
+async def iniciar_tareas_de_fondo():
+    asyncio.create_task(motor_de_alarmas())
 
 @app.post("/token", response_model=Token)
 async def login(form: OAuth2PasswordRequestForm = Depends()):
