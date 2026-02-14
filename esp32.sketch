@@ -229,5 +229,11 @@ void loop() {
     }
   }
   
-  delay(10000); // 10 segundos para pruebas. Subir en producción.
+  // --- DELAY DINÁMICO (INTELIGENTE) ---
+  // Leemos directo el pin: HIGH es Bobina OFF (Automático), LOW es Bobina ON (Manual)
+  if (digitalRead(PIN_REEFER) == HIGH) {
+    delay(10000); // ⏱️ MODO AUTO: Pausa de 10 segundos (Ahorro de datos)
+  } else {
+    delay(3000);  // ⚡ MODO MANUAL: Pausa de 3 segundos (Respuesta ultra rápida)
+  }
 }
