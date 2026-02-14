@@ -39,8 +39,7 @@ void setup() {
   digitalWrite(PIN_COND, HIGH); digitalWrite(PIN_HEAT, HIGH);
   
   // REEFER MASTER (Fail-Safe):
-  // HIGH = Bobina Desenergizada = Contacto NC Cerrado = REEFER ENCENDIDO
-  // Queremos que por defecto (si se reinicia) arranque prendido.
+  // HIGH = Bobina Desenergizada = Contacto NC Cerrado = REEFER ENCENDIDO (Automático)
   digitalWrite(PIN_REEFER, HIGH);
 
   // 2. Cargar nombre
@@ -133,26 +132,27 @@ void loop() {
       // --- ACTUAR (CONTROL FAIL-SAFE REEFER + MOTORES) ---
       
       if(rReefer == 1) {
-        // Servidor pide ON. Queremos el NC cerrado.
-        // Escribimos HIGH (Bobina Desenergizada)
-        digitalWrite(PIN_REEFER, HIGH); 
+        // --- MODO AUTOMÁTICO ---
+        // Servidor pide ON. Queremos el equipo funcionando normal (NC cerrado).
+        digitalWrite(PIN_REEFER, HIGH); // Bobina Desenergizada
         
-        // Al estar encendido el master, respetamos el estado de los motores
-        // (Para motores: 1=LOW, 0=HIGH)
-        digitalWrite(PIN_COMP, rComp ? LOW : HIGH);
-        digitalWrite(PIN_EVAP, rEvap ? LOW : HIGH);
-        digitalWrite(PIN_COND, rCond ? LOW : HIGH);
-        digitalWrite(PIN_HEAT, rHeat ? LOW : HIGH);
-      } else {
-        // Servidor pide OFF. Queremos abrir el circuito NC.
-        // Escribimos LOW (Bobina Energizada)
-        digitalWrite(PIN_REEFER, LOW); 
-        
-        // Forzamos el apagado de los motores manuales
+        // BLOQUEO: Forzamos el apagado de los motores manuales para no pelear con el controlador original
         digitalWrite(PIN_COMP, HIGH);
         digitalWrite(PIN_EVAP, HIGH);
         digitalWrite(PIN_COND, HIGH);
         digitalWrite(PIN_HEAT, HIGH);
+
+      } else {
+        // --- MODO MANUAL ---
+        // Servidor pide OFF. Queremos apagar el controlador original (NC abierto).
+        digitalWrite(PIN_REEFER, LOW); // Bobina Energizada (Tomada)
+        
+        // LIBERACIÓN: Ahora sí obedecemos a los botones manuales
+        // (Para los motores: 1 = LOW/Tomado, 0 = HIGH/Suelto)
+        digitalWrite(PIN_COMP, rComp ? LOW : HIGH);
+        digitalWrite(PIN_EVAP, rEvap ? LOW : HIGH);
+        digitalWrite(PIN_COND, rCond ? LOW : HIGH);
+        digitalWrite(PIN_HEAT, rHeat ? LOW : HIGH);
       }
     }
     http.end();
