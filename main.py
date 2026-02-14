@@ -41,6 +41,13 @@ class DeviceDelete(BaseModel): device_id: str
 class AssignmentAction(BaseModel): assignment_id: int
 class RelayCommand(BaseModel): device_id: str; relay_name: str; state: bool
 class WifiCommand(BaseModel): device_id: str
+class DeviceSettings(BaseModel):
+    device_id: str
+    setpoint: float
+    tolerancia_temp: float
+    tiempo_caliente: int
+    tiempo_apagado: int
+    tiempo_offline: int
 class LecturaCompleta(BaseModel):
     device_id: str; temp_return: float; temp_supply: float; temp_evap: float; amp_r: float; amp_s: float; amp_t: float; rssi: int; real_comp: int; real_evap: int; real_cond: int; real_heat: int; real_reefer: int
 
@@ -222,3 +229,22 @@ async def test_push(current_user: dict = Depends(get_current_user)):
         except WebPushException as ex:
             print("Error enviando push:", repr(ex))
     return {"msg": "Enviado"}
+@app.post("/api/save_settings")
+async def save_settings(settings: DeviceSettings, current_user: dict = Depends(get_current_user)):
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Si es cliente, verificamos que el equipo sea suyo
+    if current_user['role'] == 'cliente':
+        cursor.execute("SELECT id FROM user_devices JOIN users ON user_devices.user_id = users.id WHERE users.username = %s AND user_devices.device_id = %s", (current_user['username'], settings.device_id))
+        if not cursor.fetchone():
+            conn.close(); raise HTTPException(status_code=403, detail="No tienes acceso a este equipo")
+
+    sql = """UPDATE device_config SET 
+             setpoint = %s, tolerancia_temp = %s, tiempo_caliente = %s, 
+             tiempo_apagado = %s, tiempo_offline = %s 
+             WHERE device_id = %s"""
+    cursor.execute(sql, (settings.setpoint, settings.tolerancia_temp, settings.tiempo_caliente, settings.tiempo_apagado, settings.tiempo_offline, settings.device_id))
+    conn.commit()
+    conn.close()
+    return {"msg": "Configuración guardada exitosamente"}
