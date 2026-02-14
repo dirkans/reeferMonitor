@@ -60,7 +60,7 @@
                 <span class="text-gradient">Cadena de Frío.</span>
             </h1>
             <p class="mt-4 max-w-2xl text-xl md:text-2xl text-gray-400 mx-auto mb-10 font-light">
-                Monitoreo industrial en tiempo real, accionamiento remoto de motores. Prevención de fallos mediante análisis de corrientes trifásicas.
+                Monitoreo industrial en tiempo real, accionamiento remoto de motores y válvulas. Prevención de fallos mediante análisis por IA de sensores.
             </p>
             <div class="flex flex-col sm:flex-row justify-center gap-4">
                 <a href="#descubrir" class="px-8 py-4 text-lg font-bold rounded-full text-white bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 transition-all">
@@ -76,11 +76,11 @@
                 <div data-aos="fade-right" data-aos-duration="1000">
                     <h2 class="text-3xl md:text-5xl font-bold mb-6 leading-tight">Mucho más que <br>un termómetro.</h2>
                     <p class="text-lg text-gray-400 mb-6 font-light">
-                        Mientras otros sistemas solo te dicen si hace calor o frío, Reefer Monitor Pro lee el pulso vital de tu equipo. Analizamos las corrientes trifásicas de los compresores y la temperatura del evaporador para predecir fallos mecánicos antes de que rompan la cadena de frío.
+                        Mientras otros sistemas solo te dicen si hace calor o frío, Reefer Monitor Pro lee el pulso vital de tu equipo. Implementamos IA para analizar los sensores digitales que instalamos en tu equipo, incluyendo sensores de corriente, para predecir fallos mecánicos antes de que rompan la cadena de frío.
                     </p>
                     <ul class="space-y-4 text-gray-300">
-                        <li class="flex items-center gap-3">✓ <span class="font-bold text-white">Return & Supply</span> con precisión decimal.</li>
-                        <li class="flex items-center gap-3">✓ <span class="font-bold text-white">Análisis Trifásico</span> (Amp R, S, T) en tiempo real.</li>
+                        <li class="flex items-center gap-3">✓ <span class="font-bold text-white">Sensores de temperatura</span> con precisión decimal.</li>
+                        <li class="flex items-center gap-3">✓ <span class="font-bold text-white">Análisis Trifásico</span> Amperímetro en tiempo real</li>
                         <li class="flex items-center gap-3">✓ <span class="font-bold text-white">Reportes Automáticos</span> exportables en PDF.</li>
                     </ul>
                 </div>
@@ -100,14 +100,14 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center" data-aos="fade-up" data-aos-duration="1000">
             <h2 class="text-3xl md:text-5xl font-bold mb-6">El control en tus manos. <br><span class="text-blue-400">La seguridad en el hardware.</span></h2>
             <p class="text-lg text-gray-400 max-w-3xl mx-auto mb-16">
-                A diferencia de los monitores pasivos, Reefer Monitor Pro te permite tomar acción. Apagá y encendé motores, evaporadores o resistencias desde tu teléfono.
+                A diferencia de los monitores pasivos, Reefer Monitor Pro te permite tomar acción. Comandá los componentes de tus equipos desde tu teléfono.
             </p>
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
                 <div class="bg-slate-800 p-8 rounded-2xl border border-slate-700 hover:border-blue-500 transition-colors" data-aos="zoom-in" data-aos-delay="100">
                     <div class="text-4xl mb-4">🛡️</div>
                     <h3 class="text-xl font-bold mb-3 text-white">Arquitectura Fail-Safe</h3>
-                    <p class="text-gray-400 text-sm">Diseñado con relays de contacto Normalmente Cerrado. Si el sistema o el internet fallan por completo, el equipo se autoprotege y sigue enfriando. Nunca vas a perder carga por un error de red.</p>
+                    <p class="text-gray-400 text-sm">Si se detecta un problema en tu equipo de frío, podés apagarlo remotamente para evitar daños mayores en compresores y motores hasta que un técnico pueda revisarlo</p>
                 </div>
                 <div class="bg-slate-800 p-8 rounded-2xl border border-slate-700 hover:border-blue-500 transition-colors" data-aos="zoom-in" data-aos-delay="200">
                     <div class="text-4xl mb-4">⚡</div>
@@ -117,7 +117,7 @@
                 <div class="bg-slate-800 p-8 rounded-2xl border border-slate-700 hover:border-blue-500 transition-colors" data-aos="zoom-in" data-aos-delay="300">
                     <div class="text-4xl mb-4">🔋</div>
                     <h3 class="text-xl font-bold mb-3 text-white">Inmune a Cortes</h3>
-                    <p class="text-gray-400 text-sm">Gracias al respaldo UPS-USB y rutinas internas de Watchdog, el cerebro electrónico (ESP32) sobrevive a cortes eléctricos y de red, reconectándose automáticamente.</p>
+                    <p class="text-gray-400 text-sm">En caso de corte de suministro eléctrico, nuestro equipo posee batería interna de alta duración para que pueda seguir transmitiendo informacion en tiempo real y que estés al tanto sobre la interrupción.</p>
                 </div>
             </div>
         </div>
@@ -135,7 +135,7 @@
                                 <span class="text-gray-400 text-xs ml-auto">ahora</span>
                             </div>
                             <h4 class="text-white font-bold text-sm">⚠️ Alarma de Temperatura</h4>
-                            <p class="text-gray-300 text-xs mt-1">El equipo A-102 superó el setpoint (-15°C) durante más de 60 minutos.</p>
+                            <p class="text-gray-300 text-xs mt-1">El equipo A-102 se está alejando del setpoint (-18°C). Causa: El evaporador se encuentra escarchado (-23°c) y no ha entrado en descongelamiento en las ultimas 8 horas</p>
                         </div>
                     </div>
                 </div>
@@ -143,7 +143,7 @@
                 <div data-aos="fade-up" data-aos-duration="1000">
                     <h2 class="text-3xl md:text-5xl font-bold mb-6">Duerme tranquilo.<br>Nosotros vigilamos.</h2>
                     <p class="text-lg text-gray-400 mb-6 font-light">
-                        No necesitas estar mirando la pantalla todo el día. Nuestro motor de Inteligencia en la Nube analiza los ciclos de descongelamiento (Defrost) y los tiempos de enfriamiento. 
+                        No necesitas estar mirando la pantalla todo el día. Nuestro motor de Inteligencia Artificial en la Nube analiza los ciclos de descongelamiento (Defrost) y los tiempos de enfriamiento. 
                     </p>
                     <p class="text-lg text-gray-400 mb-8 font-light">
                         Si algo se sale realmente de los parámetros seguros, recibirás una <b>Notificación Push Nativa</b> directamente en la pantalla de bloqueo de tu Android o iPhone al instante.
@@ -164,7 +164,7 @@
                         <img src="/icon.png" class="w-8 h-8 rounded">
                         <span class="font-bold text-xl text-white">Reefer Monitor Pro</span>
                     </div>
-                    <p class="text-sm text-gray-500">Diseñado y ensamblado para las exigencias de la industria logística global.</p>
+                    <p class="text-sm text-gray-500">Diseñado para las exigencias de la industria marítima internacional. </p>
                 </div>
                 <div class="text-center md:text-right md:col-span-2">
                     <p class="text-gray-500 text-sm">© 2026 Reefer Monitor Pro. Todos los derechos reservados.</p>
