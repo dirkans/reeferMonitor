@@ -14,31 +14,22 @@ SECRET_KEY = "tu_secreto_super_seguro_cambialo"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-db_config = {
-    'user': 'iot_user',
-    'password': '062292',
-    'host': '127.0.0.1',
-    'database': 'reefer_iot'
-}
+db_config = {'user': 'iot_user', 'password': '062292', 'host': '127.0.0.1', 'database': 'reefer_iot'}
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 app = FastAPI()
-
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 class Token(BaseModel): access_token: str; token_type: str
-class UserCreate(BaseModel): username: str; password: str
+class UserCreate(BaseModel): username: str; password: str; role: str = "cliente"
 class UserReset(BaseModel): user_id: int; new_password: str
 class UserDelete(BaseModel): user_id: int
 class DeviceAssign(BaseModel): username: str; device_id: str
 class DeviceDelete(BaseModel): device_id: str
 class AssignmentAction(BaseModel): assignment_id: int
 class RelayCommand(BaseModel): device_id: str; relay_name: str; state: bool
-
-# Agregamos modelo simple para la orden de Wifi
 class WifiCommand(BaseModel): device_id: str
-
 class LecturaCompleta(BaseModel):
     device_id: str; temp_return: float; temp_supply: float; temp_evap: float; amp_r: float; amp_s: float; amp_t: float; rssi: int; real_comp: int; real_evap: int; real_cond: int; real_heat: int; real_reefer: int
 
@@ -50,13 +41,15 @@ def create_token(data: dict):
     to_encode.update({"exp": datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
+# --- AHORA EXTRAEMOS EL ROL DEL TOKEN ---
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
+        role: str = payload.get("role", "cliente")
         if username is None: raise HTTPException(status_code=401)
     except JWTError: raise HTTPException(status_code=401)
-    return username
+    return {"username": username, "role": role}
 
 @app.get("/login", response_class=HTMLResponse)
 async def ver_login(): return FileResponse("login.html")
@@ -69,86 +62,39 @@ async def login(form: OAuth2PasswordRequestForm = Depends()):
     cursor.execute("SELECT * FROM users WHERE username = %s", (form.username,))
     user = cursor.fetchone(); conn.close()
     if not user or not verify_pass(form.password, user['password_hash']): raise HTTPException(status_code=401)
-    return {"access_token": create_token({"sub": user['username'], "admin": user['is_admin']}), "token_type": "bearer"}
+    # Incluimos el ROL en el token
+    return {"access_token": create_token({"sub": user['username'], "role": user['role']}), "token_type": "bearer"}
 
 @app.post("/api/datos")
 async def recibir_datos_iot(d: LecturaCompleta):
-    conn = get_db()
-    cursor = conn.cursor(dictionary=True)
+    conn = get_db(); cursor = conn.cursor(dictionary=True)
     try:
-        sql = """INSERT INTO lecturas 
-                 (device_id, temperatura, temp_supply, temp_evap, amp_r, amp_s, amp_t, rssi, 
-                  real_comp, real_evap, real_cond, real_heat, real_reefer) 
-                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
-        vals = (d.device_id, d.temp_return, d.temp_supply, d.temp_evap, d.amp_r, d.amp_s, d.amp_t, d.rssi,
-                d.real_comp, d.real_evap, d.real_cond, d.real_heat, d.real_reefer)
-        cursor.execute(sql, vals)
-        conn.commit()
-
+        sql = "INSERT INTO lecturas (device_id, temperatura, temp_supply, temp_evap, amp_r, amp_s, amp_t, rssi, real_comp, real_evap, real_cond, real_heat, real_reefer) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+        cursor.execute(sql, (d.device_id, d.temp_return, d.temp_supply, d.temp_evap, d.amp_r, d.amp_s, d.amp_t, d.rssi, d.real_comp, d.real_evap, d.real_cond, d.real_heat, d.real_reefer))
         cursor.execute("SELECT * FROM device_config WHERE device_id = %s", (d.device_id,))
         config = cursor.fetchone()
-        
         if not config:
             cursor.execute("INSERT INTO device_config (device_id) VALUES (%s)", (d.device_id,))
-            conn.commit()
             config = {'relay_compresor':0, 'relay_evaporador':0, 'relay_condensador':0, 'relay_resistencia':0, 'relay_reefer':0, 'reset_wifi':0}
-
-        # Magia del Reset: Si hay orden pendiente, la apagamos para que no quede en un bucle infinito
-        if config.get('reset_wifi') == 1:
-            cursor.execute("UPDATE device_config SET reset_wifi = 0 WHERE device_id = %s", (d.device_id,))
-            conn.commit()
-
-    except Exception as e:
-        print(f"Error IOT: {e}")
-        return {"status": "error"}
-    finally:
-        conn.close()
+        if config.get('reset_wifi') == 1: cursor.execute("UPDATE device_config SET reset_wifi = 0 WHERE device_id = %s", (d.device_id,))
+        conn.commit()
+    except Exception as e: print(e); return {"status": "error"}
+    finally: conn.close()
     
-    # Le mandamos el estado de los relays y, adicionalmente, la orden de reset wifi
-    return {
-        "status": "ok",
-        "reset_wifi": int(config.get('reset_wifi', 0)),
-        "relays": {
-            "comp": int(config['relay_compresor']),
-            "evap": int(config['relay_evaporador']),
-            "cond": int(config['relay_condensador']),
-            "heat": int(config['relay_resistencia']),
-            "reefer": int(config['relay_reefer'])
-        }
-    }
+    return {"status": "ok", "reset_wifi": int(config.get('reset_wifi', 0)), "relays": {"comp": int(config['relay_compresor']), "evap": int(config['relay_evaporador']), "cond": int(config['relay_condensador']), "heat": int(config['relay_resistencia']), "reefer": int(config['relay_reefer'])}}
 
-# --- NUEVO ENDPOINT PARA ACTIVAR RESET WIFI ---
+# --- ENDPOINTS PROTEGIDOS POR ROLES ---
+
 @app.post("/admin/reset_wifi")
-async def reset_wifi_device(cmd: WifiCommand, current_user: str = Depends(get_current_user)):
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT is_admin FROM users WHERE username = %s", (current_user,))
-    user = cursor.fetchone()
-    if not user or not user[0]:
-        conn.close(); raise HTTPException(status_code=403, detail="Solo Admin")
-
-    cursor.execute("UPDATE device_config SET reset_wifi = 1 WHERE device_id = %s", (cmd.device_id,))
-    conn.commit()
-    conn.close()
+async def reset_wifi_device(cmd: WifiCommand, current_user: dict = Depends(get_current_user)):
+    if current_user['role'] != 'super_admin': raise HTTPException(status_code=403, detail="Solo Super Admin")
+    conn = get_db(); cursor = conn.cursor(); cursor.execute("UPDATE device_config SET reset_wifi = 1 WHERE device_id = %s", (cmd.device_id,)); conn.commit(); conn.close()
     return {"msg": "Orden de reinicio WiFi enviada."}
 
-@app.post("/admin/control_relay")
-async def control_relay(cmd: RelayCommand, current_user: str = Depends(get_current_user)):
-    conn = get_db(); cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT is_admin FROM users WHERE username = %s", (current_user,))
-    user = cursor.fetchone()
-    if not user or not user['is_admin']: conn.close(); raise HTTPException(status_code=403, detail="Solo Admin")
-    
-    col_name = f"relay_{cmd.relay_name}"
-    sql = f"UPDATE device_config SET {col_name} = %s WHERE device_id = %s"
-    cursor.execute(sql, (cmd.state, cmd.device_id)); conn.commit(); conn.close()
-    return {"msg": "Comando enviado"}
-
 @app.post("/admin/delete_device")
-async def delete_device(cmd: DeviceDelete, current_user: str = Depends(get_current_user)):
+async def delete_device(cmd: DeviceDelete, current_user: dict = Depends(get_current_user)):
+    if current_user['role'] != 'super_admin': raise HTTPException(status_code=403, detail="Solo Super Admin")
     conn = get_db(); cursor = conn.cursor()
-    cursor.execute("SELECT is_admin FROM users WHERE username = %s", (current_user,))
-    if not cursor.fetchone()[0]: conn.close(); raise HTTPException(status_code=403, detail="Solo Admin")
     try:
         cursor.execute("DELETE FROM user_devices WHERE device_id = %s", (cmd.device_id,))
         cursor.execute("DELETE FROM lecturas WHERE device_id = %s", (cmd.device_id,))
@@ -157,8 +103,15 @@ async def delete_device(cmd: DeviceDelete, current_user: str = Depends(get_curre
     except Exception as e: conn.close(); raise HTTPException(status_code=400, detail=str(e))
     conn.close(); return {"msg": "Equipo eliminado correctamente"}
 
+@app.post("/admin/control_relay")
+async def control_relay(cmd: RelayCommand, current_user: dict = Depends(get_current_user)):
+    if current_user['role'] not in ['super_admin', 'admin']: raise HTTPException(status_code=403, detail="Permiso Denegado")
+    conn = get_db(); cursor = conn.cursor(dictionary=True)
+    cursor.execute(f"UPDATE device_config SET relay_{cmd.relay_name} = %s WHERE device_id = %s", (cmd.state, cmd.device_id)); conn.commit(); conn.close()
+    return {"msg": "Comando enviado"}
+
 @app.get("/api/estado_actual/{device_id}")
-async def get_estado(device_id: str, current_user: str = Depends(get_current_user)):
+async def get_estado(device_id: str, current_user: dict = Depends(get_current_user)):
     conn = get_db(); cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM lecturas WHERE device_id = %s ORDER BY fecha DESC LIMIT 1", (device_id,))
     lectura = cursor.fetchone()
@@ -167,43 +120,62 @@ async def get_estado(device_id: str, current_user: str = Depends(get_current_use
     return {"lectura": lectura, "config": config}
 
 @app.get("/api/historial/{device_id}")
-async def historial(device_id: str, inicio: Optional[str] = None, fin: Optional[str] = None, current_user: str = Depends(get_current_user)):
+async def historial(device_id: str, inicio: Optional[str] = None, fin: Optional[str] = None, current_user: dict = Depends(get_current_user)):
     conn = get_db(); cursor = conn.cursor(dictionary=True)
-    if not inicio or not fin:
-        cursor.execute("SELECT * FROM lecturas WHERE device_id = %s ORDER BY fecha DESC LIMIT 2000", (device_id,))
-    else:
-        cursor.execute("SELECT * FROM lecturas WHERE device_id = %s AND fecha BETWEEN %s AND %s ORDER BY fecha ASC", (device_id, inicio, fin))
+    if not inicio or not fin: cursor.execute("SELECT * FROM lecturas WHERE device_id = %s ORDER BY fecha DESC LIMIT 2000", (device_id,))
+    else: cursor.execute("SELECT * FROM lecturas WHERE device_id = %s AND fecha BETWEEN %s AND %s ORDER BY fecha ASC", (device_id, inicio, fin))
     res = cursor.fetchall(); conn.close()
     if not inicio: return res[::-1] 
     return res
 
 @app.get("/my/devices")
-async def get_my_devices(current_user: str = Depends(get_current_user)):
+async def get_my_devices(current_user: dict = Depends(get_current_user)):
     conn = get_db(); cursor = conn.cursor(dictionary=True)
-    if current_user == 'admin': cursor.execute("SELECT device_id, TIMESTAMPDIFF(SECOND, MAX(fecha), NOW()) as segundos_atras FROM lecturas GROUP BY device_id")
-    else: cursor.execute("SELECT d.device_id, TIMESTAMPDIFF(SECOND, MAX(l.fecha), NOW()) as segundos_atras FROM user_devices d JOIN users u ON d.user_id = u.id LEFT JOIN lecturas l ON d.device_id = l.device_id WHERE u.username = %s AND d.is_active = 1 GROUP BY d.device_id", (current_user,))
+    if current_user['role'] in ['super_admin', 'admin']: 
+        cursor.execute("SELECT device_id, TIMESTAMPDIFF(SECOND, MAX(fecha), NOW()) as segundos_atras FROM lecturas GROUP BY device_id")
+    else: 
+        cursor.execute("SELECT d.device_id, TIMESTAMPDIFF(SECOND, MAX(l.fecha), NOW()) as segundos_atras FROM user_devices d JOIN users u ON d.user_id = u.id LEFT JOIN lecturas l ON d.device_id = l.device_id WHERE u.username = %s AND d.is_active = 1 GROUP BY d.device_id", (current_user['username'],))
     devices = cursor.fetchall(); conn.close(); return devices
 
 @app.get("/admin/users_list")
-async def get_users_list(current_user: str = Depends(get_current_user)): conn = get_db(); cursor = conn.cursor(dictionary=True); cursor.execute("SELECT id, username, is_admin, created_at FROM users"); users = cursor.fetchall(); conn.close(); return users
+async def get_users_list(current_user: dict = Depends(get_current_user)): 
+    if current_user['role'] not in ['super_admin', 'admin']: raise HTTPException(status_code=403)
+    conn = get_db(); cursor = conn.cursor(dictionary=True); cursor.execute("SELECT id, username, role, created_at FROM users"); users = cursor.fetchall(); conn.close(); return users
 
 @app.post("/admin/reset_password")
-async def reset_password(reset_data: UserReset, current_user: str = Depends(get_current_user)): conn = get_db(); cursor = conn.cursor(); cursor.execute("UPDATE users SET password_hash = %s WHERE id = %s", (get_hash(reset_data.new_password), reset_data.user_id)); conn.commit(); conn.close(); return {"msg": "Clave actualizada"}
+async def reset_password(reset_data: UserReset, current_user: dict = Depends(get_current_user)): 
+    if current_user['role'] not in ['super_admin', 'admin']: raise HTTPException(status_code=403)
+    conn = get_db(); cursor = conn.cursor(); cursor.execute("UPDATE users SET password_hash = %s WHERE id = %s", (get_hash(reset_data.new_password), reset_data.user_id)); conn.commit(); conn.close(); return {"msg": "Clave actualizada"}
 
 @app.post("/admin/delete_user")
-async def delete_user(delete_data: UserDelete, current_user: str = Depends(get_current_user)): conn = get_db(); cursor = conn.cursor(); cursor.execute("DELETE FROM users WHERE id = %s", (delete_data.user_id,)); conn.commit(); conn.close(); return {"msg": "Usuario eliminado"}
+async def delete_user(delete_data: UserDelete, current_user: dict = Depends(get_current_user)): 
+    if current_user['role'] != 'super_admin': raise HTTPException(status_code=403, detail="Solo Super Admin")
+    conn = get_db(); cursor = conn.cursor(); cursor.execute("DELETE FROM users WHERE id = %s", (delete_data.user_id,)); conn.commit(); conn.close(); return {"msg": "Usuario eliminado"}
 
 @app.get("/admin/assignments")
-async def get_assignments(current_user: str = Depends(get_current_user)): conn = get_db(); cursor = conn.cursor(dictionary=True); cursor.execute("SELECT ud.id, u.username, ud.device_id, ud.is_active FROM user_devices ud JOIN users u ON ud.user_id = u.id"); data = cursor.fetchall(); conn.close(); return data
+async def get_assignments(current_user: dict = Depends(get_current_user)): 
+    if current_user['role'] not in ['super_admin', 'admin']: raise HTTPException(status_code=403)
+    conn = get_db(); cursor = conn.cursor(dictionary=True); cursor.execute("SELECT ud.id, u.username, ud.device_id, ud.is_active FROM user_devices ud JOIN users u ON ud.user_id = u.id"); data = cursor.fetchall(); conn.close(); return data
 
 @app.post("/admin/toggle_active")
-async def toggle_active(action: AssignmentAction, current_user: str = Depends(get_current_user)): conn = get_db(); cursor = conn.cursor(); cursor.execute("UPDATE user_devices SET is_active = NOT is_active WHERE id = %s", (action.assignment_id,)); conn.commit(); conn.close(); return {"msg": "Estado actualizado"}
+async def toggle_active(action: AssignmentAction, current_user: dict = Depends(get_current_user)): 
+    if current_user['role'] not in ['super_admin', 'admin']: raise HTTPException(status_code=403)
+    conn = get_db(); cursor = conn.cursor(); cursor.execute("UPDATE user_devices SET is_active = NOT is_active WHERE id = %s", (action.assignment_id,)); conn.commit(); conn.close(); return {"msg": "Estado actualizado"}
 
 @app.post("/admin/delete_assignment")
-async def delete_assignment(action: AssignmentAction, current_user: str = Depends(get_current_user)): conn = get_db(); cursor = conn.cursor(); cursor.execute("DELETE FROM user_devices WHERE id = %s", (action.assignment_id,)); conn.commit(); conn.close(); return {"msg": "Asignacion eliminada"}
+async def delete_assignment(action: AssignmentAction, current_user: dict = Depends(get_current_user)): 
+    if current_user['role'] not in ['super_admin', 'admin']: raise HTTPException(status_code=403)
+    conn = get_db(); cursor = conn.cursor(); cursor.execute("DELETE FROM user_devices WHERE id = %s", (action.assignment_id,)); conn.commit(); conn.close(); return {"msg": "Asignacion eliminada"}
 
 @app.post("/admin/users")
-async def create_user(new_user: UserCreate, current_user: str = Depends(get_current_user)): conn = get_db(); cursor = conn.cursor(); cursor.execute("INSERT INTO users (username, password_hash) VALUES (%s, %s)", (new_user.username, get_hash(new_user.password))); conn.commit(); conn.close(); return {"msg": "Usuario creado"}
+async def create_user(new_user: UserCreate, current_user: dict = Depends(get_current_user)): 
+    if current_user['role'] not in ['super_admin', 'admin']: raise HTTPException(status_code=403)
+    conn = get_db(); cursor = conn.cursor()
+    # Por seguridad, si Ivan crea un usuario, forzamos a que sea 'cliente'
+    if current_user['role'] == 'admin' and new_user.role == 'super_admin': raise HTTPException(status_code=403, detail="No podes crear Super Admins")
+    cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)", (new_user.username, get_hash(new_user.password), new_user.role)); conn.commit(); conn.close(); return {"msg": "Usuario creado"}
 
 @app.post("/admin/assign")
-async def assign_device(assignment: DeviceAssign, current_user: str = Depends(get_current_user)): conn = get_db(); cursor = conn.cursor(); cursor.execute("SELECT id FROM users WHERE username = %s", (assignment.username,)); row = cursor.fetchone(); cursor.execute("INSERT INTO user_devices (user_id, device_id) VALUES (%s, %s)", (row[0], assignment.device_id)); conn.commit(); conn.close(); return {"msg": "Asignado"}
+async def assign_device(assignment: DeviceAssign, current_user: dict = Depends(get_current_user)): 
+    if current_user['role'] not in ['super_admin', 'admin']: raise HTTPException(status_code=403)
+    conn = get_db(); cursor = conn.cursor(); cursor.execute("SELECT id FROM users WHERE username = %s", (assignment.username,)); row = cursor.fetchone(); cursor.execute("INSERT INTO user_devices (user_id, device_id) VALUES (%s, %s)", (row[0], assignment.device_id)); conn.commit(); conn.close(); return {"msg": "Asignado"}
